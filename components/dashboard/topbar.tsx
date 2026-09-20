@@ -65,24 +65,22 @@ export function Topbar({ userName, userEmail }: TopbarProps) {
 
       {/* Right - User Menu */}
       <div className="flex items-center gap-3">
-        <DropdownMenu>
-          <DropdownMenuTrigger >
-            <button className="flex items-center gap-2 p-1 rounded-lg hover:bg-slate-50 transition-colors">
-              <Avatar className="w-9 h-9 bg-gradient-to-br from-blue-600 to-purple-600">
-                <AvatarFallback className="bg-transparent text-white font-semibold text-sm">
-                  {initials}
-                </AvatarFallback>
-              </Avatar>
-              <div className="hidden md:block text-left">
-                <p className="text-sm font-semibold text-slate-900 leading-tight">
-                  {userName || 'User'}
-                </p>
-                <p className="text-xs text-slate-500 leading-tight">
-                  {userEmail}
-                </p>
-              </div>
-            </button>
-          </DropdownMenuTrigger>
+          <DropdownMenu>
+  <DropdownMenuTrigger className="flex items-center gap-2 p-1 rounded-lg hover:bg-slate-50 transition-colors outline-none">
+    <Avatar className="w-9 h-9 bg-gradient-to-br from-blue-600 to-purple-600">
+      <AvatarFallback className="bg-transparent text-white font-semibold text-sm">
+        {initials}
+      </AvatarFallback>
+    </Avatar>
+    <div className="hidden md:block text-left">
+      <p className="text-sm font-semibold text-slate-900 leading-tight">
+        {userName || 'User'}
+      </p>
+      <p className="text-xs text-slate-500 leading-tight">
+        {userEmail}
+      </p>
+    </div>
+  </DropdownMenuTrigger> 
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuItem disabled>
               <User className="w-4 h-4 mr-2" />

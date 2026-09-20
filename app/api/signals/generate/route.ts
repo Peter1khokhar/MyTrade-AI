@@ -109,9 +109,9 @@ for (let attempt = 1; attempt <= 3; attempt++) {
     console.log(`🤖 Gemini attempt ${attempt}/3...`);
     
     response = await ai.models.generateContent({
-      model: process.env.GEMINI_MODEL,
-      contents: prompt,
-    });
+  model: (process.env.GEMINI_MODEL as string) || 'gemini-2.5-flash',
+  contents: prompt,
+});
     
     console.log(`✅ Success on attempt ${attempt}`);
     break;
