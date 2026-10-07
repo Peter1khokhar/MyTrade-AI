@@ -123,7 +123,7 @@ export default function WatchlistPage() {
           Watchlist
         </h1>
         <p className="text-slate-600 mt-1">
-          अपने favorite pairs track करो ({watchlist.length}/20)
+          Track your favorite pairs ({watchlist.length}/20)
         </p>
       </div>
 
@@ -132,7 +132,7 @@ export default function WatchlistPage() {
         <CardContent className="p-4 space-y-4">
           <div>
             <p className="text-sm font-semibold text-slate-700 mb-2">
-              ➕ Pair Add करो
+              ➕ Add pair
             </p>
             <div className="flex gap-2">
               <Input
@@ -201,10 +201,10 @@ export default function WatchlistPage() {
               <Star className="w-8 h-8 text-amber-600" />
             </div>
             <h3 className="text-lg font-semibold text-slate-900 mb-2">
-              Watchlist खाली है
+              Watchlist is empty
             </h3>
             <p className="text-slate-600 text-sm">
-              ऊपर से pair add करो या popular pairs से select करो
+              Add pair from given pairs or select popular pairs
             </p>
           </CardContent>
         </Card>

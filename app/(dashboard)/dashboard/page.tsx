@@ -22,7 +22,7 @@ export default async function DashboardPage() {
           🎉 Welcome back, {session?.user?.name}!
         </h1>
         <p className="text-slate-600 mt-1">
-          आज क्या trade करना है?
+          What to trade today?
         </p>
       </div>
 
@@ -65,10 +65,10 @@ export default async function DashboardPage() {
               <Zap className="w-8 h-8 text-blue-600" />
             </div>
             <h3 className="text-lg font-semibold text-slate-900 mb-2">
-              अभी कोई signal नहीं है
+              No signal yet
             </h3>
             <p className="text-slate-600 text-sm max-w-md mx-auto">
-              अपना पहला AI signal generate करने के लिए "Signals" page पर जाओ
+              For generate you first AI signal go to "Signals" page 
             </p>
           </div>
         </CardContent>

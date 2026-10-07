@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import {
-  LayoutDashboard,
+  LayoutDashboard, Brain,
   BarChart3,
   Star,
   History,
@@ -18,6 +18,7 @@ const menuItems = [
   { title: 'Analysis', href: '/analysis', icon: BarChart3 },
   { title: 'Watchlist', href: '/watchlist', icon: Star },
   { title: 'History', href: '/history', icon: History },
+  {  title: 'AI Learning',  href: '/learning',  icon: Brain},
   { title: 'Settings', href: '/settings', icon: Settings },
 ];
 

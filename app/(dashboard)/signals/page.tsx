@@ -27,7 +27,8 @@ import { SignalResult } from '@/components/signals/signal-result';
 
 const PAIRS = {
   'Forex Majors': ['EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'AUDUSD', 'NZDUSD', 'USDCAD'],
-  'Metals': ['XAUUSD', 'XAGUSD'],
+  '🥇 Gold (Delta)': ['XAUTUSD', 'PAXGUSD'],
+  '🥈 Silver': ['XAGUSD'],
   'Energy': ['USOIL', 'UKOIL'],
   'Industrial': ['XCUUSD'],
 };
@@ -62,13 +63,13 @@ export default function SignalsPage() {
       const data = await res.json();
 
       if (!data.success) {
-        setError(data.message || 'Signal generate नहीं हुआ');
+        setError(data.message || 'Signal not generated');
         return;
       }
 
       setSignal(data.signal);
     } catch (err) {
-      setError('कुछ गलत हो गया, फिर try करो');
+      setError('something went wrong please try again');
     } finally {
       setIsLoading(false);
     }
@@ -83,16 +84,16 @@ export default function SignalsPage() {
           AI Signal Generator
         </h1>
         <p className="text-slate-600 mt-1">
-          ICT/SMC strategy के साथ high-probability trading signals
+          high-probability trading signals with ICT/SMC strategy
         </p>
       </div>
 
       {/* Generator Form */}
       <Card className="border-slate-200">
         <CardHeader>
-          <CardTitle className="text-lg">🎯 Signal Generate करो</CardTitle>
+          <CardTitle className="text-lg">🎯 Generate Signal</CardTitle>
           <CardDescription>
-            Pair और timeframe select करो, फिर AI analysis शुरू करो
+            Select Pair and timeframe, and start AI analysis
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
@@ -167,7 +168,7 @@ export default function SignalsPage() {
             {isLoading ? (
               <>
                 <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                AI Analysis चल रहा है...
+                AI Analysis is going on...
               </>
             ) : (
               <>

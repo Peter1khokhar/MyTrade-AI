@@ -110,7 +110,7 @@ export default function HistoryPage() {
             Signal History
           </h1>
           <p className="text-slate-600 mt-1">
-            आपके सारे generated signals ({total} total)
+            your all generated signals ({total} total)
           </p>
         </div>
       </div>
@@ -184,10 +184,10 @@ export default function HistoryPage() {
               <AlertCircle className="w-8 h-8 text-blue-600" />
             </div>
             <h3 className="text-lg font-semibold text-slate-900 mb-2">
-              अभी कोई signals नहीं हैं
+              no signals yet
             </h3>
             <p className="text-slate-600 text-sm max-w-md mx-auto">
-              "Signals" page पर जाकर अपना पहला AI signal generate करो
+              go to "Signals" page for generate your AI signal 
             </p>
           </CardContent>
         </Card>

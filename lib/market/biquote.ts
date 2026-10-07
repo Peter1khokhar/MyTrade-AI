@@ -2,30 +2,90 @@ import Biquote from 'biquote';
 
 const bq: any = new Biquote();
 
+// ═══════════════════════════════════════════════════════════
+// 🎯 DELTA EXCHANGE MAPPING
+// ═══════════════════════════════════════════════════════════
+// Delta Exchange पर gold के लिए direct XAUUSD नहीं है
+// इसलिए हम XAUUSD को XAUTUSD (Tether Gold) पर map करते हैं
+// User XAUTUSD या PAXGUSD भी directly select कर सकता है
+
+export const DELTA_MAPPING: Record<string, string> = {
+  // UI pair → biquote data source
+  'XAUUSD': 'XAUUSD',      // Direct
+  'XAUTUSD': 'XAUUSD',     // XAUT के लिए XAUUSD data (same price)
+  'PAXGUSD': 'XAUUSD',     // PAXG के लिए XAUUSD data (same price)
+  'XAGUSD': 'XAGUSD',
+};
+
+// Display names जो UI में दिखाएंगे
+export const PAIR_DISPLAY_NAMES: Record<string, string> = {
+  'XAUUSD': 'Gold (XAUT on Delta)',
+  'XAUTUSD': 'Tether Gold (XAUT)',
+  'PAXGUSD': 'Pax Gold (PAXG)',
+  'XAGUSD': 'Silver',
+};
+
+// ═══════════════════════════════════════════════════════════
+// 📊 SUPPORTED PAIRS (UI में यही दिखेंगे)
+// ═══════════════════════════════════════════════════════════
+
 export const SUPPORTED_PAIRS = [
+  // Forex Majors
   'EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'AUDUSD', 'NZDUSD', 'USDCAD',
-  'XAUUSD', 'XAGUSD',
+  
+  // 🥇 Metals - Gold (दोनों options)
+  'XAUTUSD',    // Tether Gold
+  'PAXGUSD',    // Pax Gold
+  
+  // 🥈 Silver
+  'XAGUSD',
+  
+  // Energy
   'USOIL', 'UKOIL',
+  
+  // Industrial
   'XCUUSD',
 ];
 
+// ═══════════════════════════════════════════════════════════
+// 🔧 HELPER: Convert UI pair to Delta pair
+// ═══════════════════════════════════════════════════════════
+
+export function getDeltaPair(pair: string): string {
+  return DELTA_MAPPING[pair] || pair;
+}
+
+export function getDisplayName(pair: string): string {
+  return PAIR_DISPLAY_NAMES[pair] || pair;
+}
+
+// ═══════════════════════════════════════════════════════════
+// 📈 MARKET DATA FUNCTIONS
+// ═══════════════════════════════════════════════════════════
+
 export interface MarketTick {
   symbol: string;
+  displaySymbol: string;
   price: number;
   change: number;
   changePercent: number;
   high?: number;
   low?: number;
+  deltaPair: string;
 }
 
 export async function getSingleTick(symbol: string): Promise<MarketTick | null> {
   try {
-    const data: any = await bq.tick(symbol);
+    // UI pair को Delta pair में convert करो
+    const deltaPair = getDeltaPair(symbol);
+    const data: any = await bq.tick(deltaPair);
     
     if (!data) return null;
     
     return {
       symbol,
+      displaySymbol: getDisplayName(symbol),
+      deltaPair,
       price: data.mid || 0,
       change: data.dayDiff || 0,
       changePercent: data.dayDiffPercent || 0,
@@ -40,15 +100,22 @@ export async function getSingleTick(symbol: string): Promise<MarketTick | null> 
 
 export async function getMultipleTicks(symbols: string[]): Promise<MarketTick[]> {
   try {
-    const data: any = await bq.latest(symbols);
+    // सारे UI pairs को Delta pairs में convert करो
+    const deltaPairs = symbols.map(s => getDeltaPair(s));
+    
+    const data: any = await bq.latest(deltaPairs);
     
     if (!data) return [];
     
     return symbols
-      .map((symbol) => {
-        const tick: any = data[symbol] || data;
+      .map((symbol, index) => {
+        const deltaPair = deltaPairs[index];
+        const tick: any = data[deltaPair] || data[symbol] || data;
+        
         return {
           symbol,
+          displaySymbol: getDisplayName(symbol),
+          deltaPair,
           price: tick?.mid || 0,
           change: tick?.dayDiff || 0,
           changePercent: tick?.dayDiffPercent || 0,
@@ -69,7 +136,14 @@ export async function getOHLC(
   limit: number = 100
 ): Promise<any[]> {
   try {
-    const bars: any = await (bq as any).ohlc(symbol, { interval: interval as any, limit });
+    // Delta pair में convert करो
+    const deltaPair = getDeltaPair(symbol);
+    
+    const bars: any = await (bq as any).ohlc(deltaPair, { 
+      interval: interval as any, 
+      limit 
+    });
+    
     return bars || [];
   } catch (error) {
     console.error(`❌ Error fetching OHLC for ${symbol}:`, error);

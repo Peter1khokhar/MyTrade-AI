@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-const PAIRS = ['EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'AUDUSD', 'NZDUSD', 'USDCAD', 'XAUUSD', 'XAGUSD', 'USOIL'];
+const PAIRS = ['EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'AUDUSD', 'NZDUSD', 'USDCAD', 'XAUUSD','XAUTUSD', 'XAGUSD', 'USOIL'];
 
 export default function AnalysisPage() {
   const [pair, setPair] = useState('EURUSD');
@@ -47,7 +47,7 @@ export default function AnalysisPage() {
 
       setAnalysis(data);
     } catch (err) {
-      setError('Analysis नहीं हुआ, फिर try करो');
+      setError('Analysis not done please try again');
     } finally {
       setIsLoading(false);
     }
@@ -81,7 +81,7 @@ export default function AnalysisPage() {
       {/* Pair Selector */}
       <Card className="border-slate-200">
         <CardHeader>
-          <CardTitle className="text-lg">🎯 Pair Select करो</CardTitle>
+          <CardTitle className="text-lg">🎯 Select Pair</CardTitle>
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="flex flex-wrap gap-2">

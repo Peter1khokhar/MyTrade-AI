@@ -103,7 +103,7 @@ export default function HomePage() {
       <section className="max-w-7xl mx-auto px-4 lg:px-6 py-20">
         <div className="text-center mb-16">
           <h2 className="text-3xl lg:text-4xl font-bold text-slate-900 mb-4">
-            सब कुछ जो trading के लिए चाहिए
+            all that you want in trading
           </h2>
           <p className="text-lg text-slate-600 max-w-2xl mx-auto">
             Professional-grade tools और AI analysis एक जगह
