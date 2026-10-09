@@ -91,6 +91,12 @@ export async function PUT(req: Request) {
 
     // Update password (if provided)
     if (currentPassword && newPassword) {
+        if (!user.password) {
+    return NextResponse.json(
+      { success: false, message: 'Password change not available for Google accounts' },
+      { status: 400 }
+    );
+  }
       const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
       if (!isPasswordValid) {
         return NextResponse.json(

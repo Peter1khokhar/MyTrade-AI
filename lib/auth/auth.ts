@@ -74,49 +74,60 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     // ═══════════════════════════════════════════════════════════
     // 🔵 signIn callback - Google user create/update
     // ═══════════════════════════════════════════════════════════
-    async signIn({ user, account }) {
-      if (account?.provider === 'google') {
-        try {
-          await connectDB();
+async signIn({ user, account }) {
+  if (account?.provider === 'google') {
+    try {
+      await connectDB();
 
-          const existingUser = await User.findOne({
-            email: user.email?.toLowerCase(),
-          });
+      // ⚠️ Email check - required
+      const email = user.email?.toLowerCase();
+      if (!email) {
+        console.error('❌ Google sign-in: no email');
+        return false;
+      }
 
-          if (existingUser) {
-            // Existing user - update Google info
-            existingUser.image = user.image || existingUser.image;
-            existingUser.isEmailVerified = true; // Google verified
-            if (!existingUser.provider || existingUser.provider === 'credentials') {
-              existingUser.provider = existingUser.password ? 'credentials' : 'google';
-            }
-            await existingUser.save();
-            user.id = existingUser._id.toString();
-            console.log('✅ Google sign-in: existing user', user.email);
-          } else {
-            // New user via Google
-            const newUser = await User.create({
-              name: user.name || 'Google User',
-              email: user.email?.toLowerCase(),
-              image: user.image,
-              provider: 'google',
-              isEmailVerified: true, // Google already verified
-              plan: 'free',
-              watchlist: ['EURUSD', 'GBPUSD', 'XAUTUSD'],
-            });
-            user.id = newUser._id.toString();
-            console.log('✅ New user via Google:', user.email);
-          }
+      // Check existing user
+      const existingUser = await User.findOne({ email });
 
-          return true;
-        } catch (error) {
-          console.error('❌ Google sign-in error:', error);
-          return false;
+      if (existingUser) {
+        // Update existing user
+        existingUser.image = user.image || existingUser.image || undefined,
+        existingUser.isEmailVerified = true;
+        if (
+          !existingUser.provider ||
+          existingUser.provider === 'credentials'
+        ) {
+          existingUser.provider = existingUser.password
+            ? 'credentials'
+            : 'google';
         }
+        await existingUser.save();
+        user.id = existingUser._id.toString();
+        console.log('✅ Google sign-in: existing user', email);
+      } else {
+        // Create new user
+        const newUser: any = await User.create({
+          name: user.name || 'Google User',
+          email,
+          image: user.image || undefined,
+          provider: 'google',
+          isEmailVerified: true,
+          plan: 'free',
+          watchlist: ['EURUSD', 'GBPUSD', 'XAUTUSD'],
+        });
+        user.id = newUser._id.toString();
+        console.log('✅ New user via Google:', email);
       }
 
       return true;
-    },
+    } catch (error) {
+      console.error('❌ Google sign-in error:', error);
+      return false;
+    }
+  }
+
+  return true;
+},
 
     // ═══════════════════════════════════════════════════════════
     // 🎫 JWT callback
