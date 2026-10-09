@@ -102,7 +102,7 @@ async signIn({ user, account }) {
             : 'google';
         }
         await existingUser.save();
-        user.id = existingUser._id.toString();
+        user.id = (existingUser as any)._id.toString();
         console.log('✅ Google sign-in: existing user', email);
       } else {
         // Create new user

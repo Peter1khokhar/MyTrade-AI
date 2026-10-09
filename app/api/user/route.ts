@@ -93,7 +93,10 @@ export async function PUT(req: Request) {
     if (currentPassword && newPassword) {
         if (!user.password) {
     return NextResponse.json(
-      { success: false, message: 'Password change not available for Google accounts' },
+      {
+        success: false,
+        message: 'Password change not available for Google accounts',
+      },
       { status: 400 }
     );
   }
