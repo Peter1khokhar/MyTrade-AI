@@ -1,17 +1,32 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
 
-// TypeScript interface - User का shape define करता है
 export interface IUser extends Document {
   name: string;
   email: string;
-  password: string;
+  password?: string;           // ⚠️ Optional for Google users
+  image?: string;              // 🆕 Google avatar
+  provider?: 'credentials' | 'google';  // 🆕 Login method
   plan: 'free' | 'pro' | 'premium';
   watchlist: string[];
+  
+  // Email Verification
+  isEmailVerified: boolean;
+  emailVerificationCode?: string;
+  emailVerificationExpiry?: Date;
+  emailVerificationAttempts: number;
+  lastVerificationSentAt?: Date;
+
+  // Password Reset feild
+  passwordResetCode?: string;
+  passwordResetExpiry?: Date;
+  passwordResetAttempts: number;
+  lastPasswordResetSentAt?: Date;
+  passwordResetVerified?: boolean;  // After OTP verified, before password set
+  
   createdAt: Date;
   updatedAt: Date;
 }
 
-// Mongoose Schema - Database में कैसे store होगा
 const UserSchema = new Schema<IUser>(
   {
     name: {
@@ -34,9 +49,17 @@ const UserSchema = new Schema<IUser>(
     },
     password: {
       type: String,
-      required: [true, 'Password ज़रूरी है'],
+      required: false,  // ⚠️ Changed - optional for Google users
       minlength: [6, 'Password कम से कम 6 characters का होना चाहिए'],
-      select: false, // Default queries में password नहीं आएगा (security)
+      select: false,
+    },
+    image: {
+      type: String,  // 🆕 Google avatar URL
+    },
+    provider: {
+      type: String,
+      enum: ['credentials', 'google'],
+      default: 'credentials',
     },
     plan: {
       type: String,
@@ -45,18 +68,61 @@ const UserSchema = new Schema<IUser>(
     },
     watchlist: {
       type: [String],
-      default: ['EURUSD', 'GBPUSD', 'XAUUSD'], // Default watchlist
+      default: ['EURUSD', 'GBPUSD', 'XAUTUSD'],
+    },
+    
+    // Email Verification Fields
+    isEmailVerified: {
+      type: Boolean,
+      default: false,
+    },
+    emailVerificationCode: {
+      type: String,
+      select: false,
+    },
+    emailVerificationExpiry: {
+      type: Date,
+      select: false,
+    },
+    emailVerificationAttempts: {
+      type: Number,
+      default: 0,
+    },
+    lastVerificationSentAt: {
+      type: Date,
+      select: false,
+    },
+  
+      // 🆕 Password Reset Fields
+    passwordResetCode: {
+      type: String,
+      select: false,
+    },
+    passwordResetExpiry: {
+      type: Date,
+      select: false,
+    },
+    passwordResetAttempts: {
+      type: Number,
+      default: 0,
+    },
+    lastPasswordResetSentAt: {
+      type: Date,
+      select: false,
+    },
+    passwordResetVerified: {
+      type: Boolean,
+      default: false,
+      select: false,
     },
   },
   {
-    timestamps: true, // createdAt और updatedAt automatically add होंगे
+    timestamps: true,
   }
 );
 
-// Index for faster email lookup
 UserSchema.index({ email: 1 });
 
-// Model create करो (अगर already है तो वही use करो - Next.js hot reload के लिए)
 const User: Model<IUser> =
   mongoose.models.User || mongoose.model<IUser>('User', UserSchema);
 

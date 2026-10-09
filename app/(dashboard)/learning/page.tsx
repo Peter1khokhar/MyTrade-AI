@@ -10,14 +10,15 @@ import {
   Target,
   Lightbulb,
   BookOpen,
-  RefreshCw,
   Loader2,
   Sparkles,
   Award,
   AlertCircle,
-  CheckCircle2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { motion } from 'framer-motion';
+import { staggerContainer, staggerItem, fadeInUp } from '@/lib/animations';
+import { toast } from 'sonner';
 
 interface LearningLog {
   _id: string;
@@ -45,13 +46,12 @@ export default function LearningPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
 
   const fetchLearningHistory = async () => {
     try {
       const res = await fetch('/api/learning/history');
       const data = await res.json();
-      
+
       if (data.success) {
         setLogs(data.logs);
       }
@@ -69,22 +69,22 @@ export default function LearningPage() {
   const handleAnalyze = async () => {
     setIsAnalyzing(true);
     setError('');
-    setSuccess('');
 
     try {
       const res = await fetch('/api/learning/analyze', { method: 'POST' });
       const data = await res.json();
 
       if (!data.success) {
+        toast.error(data.message);
         setError(data.message);
         return;
       }
 
-      setSuccess('🎉 Learning analysis complete! AI ने नई lessons निकालीं');
+      toast.success('🎉 Learning analysis complete!');
       fetchLearningHistory();
-      setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
-      setError('Analysis failed, फिर try करो');
+      toast.error('Analysis failed, try again');
+      setError('Analysis failed, try again');
     } finally {
       setIsAnalyzing(false);
     }
@@ -106,171 +106,217 @@ export default function LearningPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between flex-wrap gap-4">
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="flex items-start justify-between flex-wrap gap-4"
+      >
         <div>
-          <h1 className="text-2xl lg:text-3xl font-bold text-slate-900 flex items-center gap-2">
-            <Brain className="w-7 h-7 text-purple-600" />
+          <h1 className="text-2xl lg:text-3xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <Brain className="w-7 h-7 text-purple-600 dark:text-purple-400" />
             AI Learning Center
           </h1>
-          <p className="text-slate-600 mt-1">
-            अपने trades से AI सीख रहा है - performance improve हो रही है
+          <p className="text-slate-600 dark:text-slate-400 mt-1">
+            AI सीख रहा है आपके trades से — performance improve हो रही है
           </p>
         </div>
-        <Button
-          onClick={handleAnalyze}
-          disabled={isAnalyzing}
-          className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-        >
-          {isAnalyzing ? (
-            <>
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Analyzing...
-            </>
-          ) : (
-            <>
-              <Sparkles className="w-4 h-4 mr-2" />
-              Run Learning Analysis
-            </>
-          )}
-        </Button>
-      </div>
+        <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+          <Button
+            onClick={handleAnalyze}
+            disabled={isAnalyzing}
+            className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+          >
+            {isAnalyzing ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Analyzing...
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4 mr-2" />
+                Run Learning Analysis
+              </>
+            )}
+          </Button>
+        </motion.div>
+      </motion.div>
 
-      {/* Messages */}
+      {/* Error */}
       {error && (
-        <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+        <motion.div
+          initial={{ opacity: 0, x: -10 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-lg text-red-700 dark:text-red-400 text-sm"
+        >
           <AlertCircle className="w-4 h-4 flex-shrink-0" />
           <span>{error}</span>
-        </div>
-      )}
-      {success && (
-        <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
-          <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-          <span>{success}</span>
-        </div>
+        </motion.div>
       )}
 
       {isLoading && (
         <div className="flex items-center justify-center py-12">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+          <Loader2 className="w-8 h-8 animate-spin text-blue-600 dark:text-blue-400" />
         </div>
       )}
 
       {/* Empty State */}
       {!isLoading && logs.length === 0 && (
-        <Card className="border-slate-200">
-          <CardContent className="p-12 text-center">
-            <div className="w-16 h-16 bg-gradient-to-br from-purple-100 to-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <Brain className="w-8 h-8 text-purple-600" />
-            </div>
-            <h3 className="text-lg font-semibold text-slate-900 mb-2">
-              Learning शुरू करने के लिए तैयार
-            </h3>
-            <p className="text-slate-600 text-sm max-w-md mx-auto mb-4">
-              जब तुम्हारे पास कम से कम 3 closed trades होंगी, तब AI analyze करके lessons निकालेगा
-            </p>
-            <p className="text-xs text-slate-500">
-              ऊपर "Run Learning Analysis" button click करके शुरू करो
-            </p>
-          </CardContent>
-        </Card>
+        <motion.div variants={fadeInUp} initial="hidden" animate="visible">
+          <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+            <CardContent className="p-12 text-center">
+              <motion.div
+                animate={{ y: [0, -10, 0] }}
+                transition={{ duration: 2, repeat: Infinity }}
+                className="w-16 h-16 bg-gradient-to-br from-purple-100 to-blue-100 dark:from-purple-950 dark:to-blue-950 rounded-2xl flex items-center justify-center mx-auto mb-4"
+              >
+                <Brain className="w-8 h-8 text-purple-600 dark:text-purple-400" />
+              </motion.div>
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
+                Ready to start learning
+              </h3>
+              <p className="text-slate-600 dark:text-slate-400 text-sm max-w-md mx-auto mb-4">
+                AI needs at least 3 closed trades to analyze and find patterns
+              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-500">
+                Click "Run Learning Analysis" button above to start
+              </p>
+            </CardContent>
+          </Card>
+        </motion.div>
       )}
 
-      {/* Current Learning Stats */}
+      {/* Learning Data */}
       {!isLoading && latestLog && (
         <>
           {/* Performance Stats */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card className="border-slate-200">
-              <CardContent className="p-5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-slate-600 font-semibold uppercase">Win Rate</p>
-                    <p className="text-2xl font-bold text-green-600 mt-1">
-                      {latestLog.winRate}%
-                    </p>
+          <motion.div
+            variants={staggerContainer}
+            initial="hidden"
+            animate="visible"
+            className="grid grid-cols-2 lg:grid-cols-4 gap-4"
+          >
+            <motion.div variants={staggerItem} whileHover={{ y: -4 }}>
+              <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:shadow-lg transition-all cursor-pointer">
+                <CardContent className="p-5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-slate-600 dark:text-slate-400 font-semibold uppercase">
+                        Win Rate
+                      </p>
+                      <p className="text-2xl font-bold text-green-600 dark:text-green-400 mt-1">
+                        {latestLog.winRate}%
+                      </p>
+                    </div>
+                    <div className="w-12 h-12 bg-green-100 dark:bg-green-950/50 rounded-xl flex items-center justify-center">
+                      <Award className="w-6 h-6 text-green-600 dark:text-green-400" />
+                    </div>
                   </div>
-                  <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
-                    <Award className="w-6 h-6 text-green-600" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </motion.div>
 
-            <Card className="border-slate-200">
-              <CardContent className="p-5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-slate-600 font-semibold uppercase">Trades</p>
-                    <p className="text-2xl font-bold text-blue-600 mt-1">
-                      {latestLog.tradesAnalyzed}
-                    </p>
+            <motion.div variants={staggerItem} whileHover={{ y: -4 }}>
+              <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:shadow-lg transition-all cursor-pointer">
+                <CardContent className="p-5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-slate-600 dark:text-slate-400 font-semibold uppercase">
+                        Trades
+                      </p>
+                      <p className="text-2xl font-bold text-blue-600 dark:text-blue-400 mt-1">
+                        {latestLog.tradesAnalyzed}
+                      </p>
+                    </div>
+                    <div className="w-12 h-12 bg-blue-100 dark:bg-blue-950/50 rounded-xl flex items-center justify-center">
+                      <Target className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                    </div>
                   </div>
-                  <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-                    <Target className="w-6 h-6 text-blue-600" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </motion.div>
 
-            <Card className="border-slate-200">
-              <CardContent className="p-5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-slate-600 font-semibold uppercase">Avg Pips</p>
-                    <p className={cn(
-                      'text-2xl font-bold mt-1',
-                      latestLog.avgPips > 0 ? 'text-green-600' : 'text-red-600'
-                    )}>
-                      {latestLog.avgPips > 0 ? '+' : ''}{latestLog.avgPips}
-                    </p>
+            <motion.div variants={staggerItem} whileHover={{ y: -4 }}>
+              <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:shadow-lg transition-all cursor-pointer">
+                <CardContent className="p-5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-slate-600 dark:text-slate-400 font-semibold uppercase">
+                        Avg Pips
+                      </p>
+                      <p
+                        className={cn(
+                          'text-2xl font-bold mt-1',
+                          latestLog.avgPips > 0
+                            ? 'text-green-600 dark:text-green-400'
+                            : 'text-red-600 dark:text-red-400'
+                        )}
+                      >
+                        {latestLog.avgPips > 0 ? '+' : ''}
+                        {latestLog.avgPips}
+                      </p>
+                    </div>
+                    <div className="w-12 h-12 bg-purple-100 dark:bg-purple-950/50 rounded-xl flex items-center justify-center">
+                      {latestLog.avgPips > 0 ? (
+                        <TrendingUp className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+                      ) : (
+                        <TrendingDown className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+                      )}
+                    </div>
                   </div>
-                  <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
-                    {latestLog.avgPips > 0 ? (
-                      <TrendingUp className="w-6 h-6 text-purple-600" />
-                    ) : (
-                      <TrendingDown className="w-6 h-6 text-purple-600" />
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </motion.div>
 
-            <Card className="border-slate-200">
-              <CardContent className="p-5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-slate-600 font-semibold uppercase">Version</p>
-                    <p className="text-2xl font-bold text-amber-600 mt-1">
-                      v{latestLog.promptVersion}
-                    </p>
+            <motion.div variants={staggerItem} whileHover={{ y: -4 }}>
+              <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:shadow-lg transition-all cursor-pointer">
+                <CardContent className="p-5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-slate-600 dark:text-slate-400 font-semibold uppercase">
+                        Version
+                      </p>
+                      <p className="text-2xl font-bold text-amber-600 dark:text-amber-400 mt-1">
+                        v{latestLog.promptVersion}
+                      </p>
+                    </div>
+                    <div className="w-12 h-12 bg-amber-100 dark:bg-amber-950/50 rounded-xl flex items-center justify-center">
+                      <BookOpen className="w-6 h-6 text-amber-600 dark:text-amber-400" />
+                    </div>
                   </div>
-                  <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center">
-                    <BookOpen className="w-6 h-6 text-amber-600" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </motion.div>
 
-          {/* Best/Worst Analysis */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <Card className="border-slate-200 border-l-4 border-l-green-500">
+          {/* Best/Worst */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2, duration: 0.4 }}
+            className="grid grid-cols-1 lg:grid-cols-2 gap-4"
+          >
+            <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 border-l-4 border-l-green-500">
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm text-green-700 flex items-center gap-2">
+                <CardTitle className="text-sm text-green-700 dark:text-green-400 flex items-center gap-2">
                   🏆 Best Performing
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
                   <div className="flex justify-between">
-                    <span className="text-sm text-slate-600">Best Pair</span>
-                    <span className="font-bold text-slate-900">
+                    <span className="text-sm text-slate-600 dark:text-slate-400">
+                      Best Pair
+                    </span>
+                    <span className="font-bold text-slate-900 dark:text-white">
                       {latestLog.bestPair} ({latestLog.bestPairWinRate}% WR)
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-sm text-slate-600">Best Strategy</span>
-                    <span className="font-bold text-slate-900">
+                    <span className="text-sm text-slate-600 dark:text-slate-400">
+                      Best Strategy
+                    </span>
+                    <span className="font-bold text-slate-900 dark:text-white">
                       {latestLog.bestStrategy || 'N/A'}
                     </span>
                   </div>
@@ -278,153 +324,196 @@ export default function LearningPage() {
               </CardContent>
             </Card>
 
-            <Card className="border-slate-200 border-l-4 border-l-red-500">
+            <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 border-l-4 border-l-red-500">
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm text-red-700 flex items-center gap-2">
+                <CardTitle className="text-sm text-red-700 dark:text-red-400 flex items-center gap-2">
                   ❌ Worst Performing
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
                   <div className="flex justify-between">
-                    <span className="text-sm text-slate-600">Worst Pair</span>
-                    <span className="font-bold text-slate-900">
+                    <span className="text-sm text-slate-600 dark:text-slate-400">
+                      Worst Pair
+                    </span>
+                    <span className="font-bold text-slate-900 dark:text-white">
                       {latestLog.worstPair} ({latestLog.worstPairWinRate}% WR)
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-sm text-slate-600">Worst Strategy</span>
-                    <span className="font-bold text-slate-900">
+                    <span className="text-sm text-slate-600 dark:text-slate-400">
+                      Worst Strategy
+                    </span>
+                    <span className="font-bold text-slate-900 dark:text-white">
                       {latestLog.worstStrategy || 'N/A'}
                     </span>
                   </div>
                 </div>
               </CardContent>
             </Card>
-          </div>
+          </motion.div>
 
           {/* Lessons */}
-          <Card className="border-slate-200 bg-gradient-to-br from-purple-50 to-blue-50">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-purple-900">
-                <Brain className="w-5 h-5" />
-                🧠 Lessons Learned
-              </CardTitle>
-              <CardDescription className="text-purple-700">
-                AI ने तुम्हारे trades से ये patterns खोजे
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {latestLog.lessons.map((lesson, i) => (
-                <div
-                  key={i}
-                  className="flex items-start gap-3 p-3 bg-white rounded-lg border border-purple-100"
-                >
-                  <div className="w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold text-purple-700">
-                    {i + 1}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3, duration: 0.4 }}
+          >
+            <Card className="border-slate-200 dark:border-slate-800 bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-950/30 dark:to-blue-950/30">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-purple-900 dark:text-purple-300">
+                  <Brain className="w-5 h-5" />
+                  🧠 Lessons Learned
+                </CardTitle>
+                <CardDescription className="text-purple-700 dark:text-purple-400">
+                  AI ने आपके trades से ये patterns खोजे
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {latestLog.lessons.map((lesson, i) => (
+                  <div
+                    key={i}
+                    className="flex items-start gap-3 p-3 bg-white dark:bg-slate-900 rounded-lg border border-purple-100 dark:border-purple-900"
+                  >
+                    <div className="w-6 h-6 bg-purple-100 dark:bg-purple-950/50 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold text-purple-700 dark:text-purple-400">
+                      {i + 1}
+                    </div>
+                    <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                      {lesson}
+                    </p>
                   </div>
-                  <p className="text-sm text-slate-700 leading-relaxed">{lesson}</p>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+                ))}
+              </CardContent>
+            </Card>
+          </motion.div>
 
           {/* Improvements */}
-          <Card className="border-slate-200 bg-gradient-to-br from-amber-50 to-orange-50">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-amber-900">
-                <Lightbulb className="w-5 h-5" />
-                💡 Improvements to Apply
-              </CardTitle>
-              <CardDescription className="text-amber-700">
-                ये changes अब automatically signals में apply होंगे
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {latestLog.improvements.map((improvement, i) => (
-                <div
-                  key={i}
-                  className="flex items-start gap-3 p-3 bg-white rounded-lg border border-amber-100"
-                >
-                  <div className="w-6 h-6 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold text-amber-700">
-                    {i + 1}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4, duration: 0.4 }}
+          >
+            <Card className="border-slate-200 dark:border-slate-800 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-amber-900 dark:text-amber-300">
+                  <Lightbulb className="w-5 h-5" />
+                  💡 Improvements to Apply
+                </CardTitle>
+                <CardDescription className="text-amber-700 dark:text-amber-400">
+                  ये changes अब automatically signals में apply होंगे
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {latestLog.improvements.map((improvement, i) => (
+                  <div
+                    key={i}
+                    className="flex items-start gap-3 p-3 bg-white dark:bg-slate-900 rounded-lg border border-amber-100 dark:border-amber-900"
+                  >
+                    <div className="w-6 h-6 bg-amber-100 dark:bg-amber-950/50 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold text-amber-700 dark:text-amber-400">
+                      {i + 1}
+                    </div>
+                    <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                      {improvement}
+                    </p>
                   </div>
-                  <p className="text-sm text-slate-700 leading-relaxed">{improvement}</p>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+                ))}
+              </CardContent>
+            </Card>
+          </motion.div>
 
           {/* Current Focus */}
           {latestLog.refinedPromptSummary && (
-            <Card className="border-slate-200 bg-gradient-to-br from-green-50 to-teal-50 border-l-4 border-l-green-500">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-green-900">
-                  🎯 Current Focus
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-green-900 leading-relaxed font-medium">
-                  {latestLog.refinedPromptSummary}
-                </p>
-              </CardContent>
-            </Card>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5, duration: 0.4 }}
+            >
+              <Card className="border-slate-200 dark:border-slate-800 bg-gradient-to-br from-green-50 to-teal-50 dark:from-green-950/30 dark:to-teal-950/30 border-l-4 border-l-green-500">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-green-900 dark:text-green-300">
+                    🎯 Current Focus
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-green-900 dark:text-green-300 leading-relaxed font-medium">
+                    {latestLog.refinedPromptSummary}
+                  </p>
+                </CardContent>
+              </Card>
+            </motion.div>
           )}
 
           {/* Learning History */}
-          <Card className="border-slate-200">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <BookOpen className="w-5 h-5" />
-                📚 Learning History
-              </CardTitle>
-              <CardDescription>
-                पिछली analyses का record
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {logs.map((log, i) => (
-                  <div
-                    key={log._id}
-                    className={cn(
-                      'flex items-center justify-between p-3 rounded-lg border',
-                      i === 0 ? 'bg-blue-50 border-blue-200' : 'bg-slate-50 border-slate-200'
-                    )}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className={cn(
-                        'w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs',
-                        i === 0 ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-700'
-                      )}>
-                        v{log.promptVersion}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.6, duration: 0.4 }}
+          >
+            <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-slate-900 dark:text-white">
+                  <BookOpen className="w-5 h-5" />
+                  📚 Learning History
+                </CardTitle>
+                <CardDescription className="text-slate-600 dark:text-slate-400">
+                  Past analysis records
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {logs.map((log, i) => (
+                    <div
+                      key={log._id}
+                      className={cn(
+                        'flex items-center justify-between p-3 rounded-lg border transition-all hover:shadow-md',
+                        i === 0
+                          ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-900'
+                          : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700'
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={cn(
+                            'w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs',
+                            i === 0
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                          )}
+                        >
+                          v{log.promptVersion}
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                            {log.tradesAnalyzed} trades analyzed
+                          </p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">
+                            {formatDate(log.createdAt)}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900">
-                          {log.tradesAnalyzed} trades analyzed
+                      <div className="text-right">
+                        <p
+                          className={cn(
+                            'text-sm font-bold',
+                            log.winRate >= 60
+                              ? 'text-green-600 dark:text-green-400'
+                              : log.winRate >= 40
+                              ? 'text-amber-600 dark:text-amber-400'
+                              : 'text-red-600 dark:text-red-400'
+                          )}
+                        >
+                          {log.winRate}% WR
                         </p>
-                        <p className="text-xs text-slate-500">
-                          {formatDate(log.createdAt)}
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {log.lessons.length} lessons
                         </p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className={cn(
-                        'text-sm font-bold',
-                        log.winRate >= 60 ? 'text-green-600' : 
-                        log.winRate >= 40 ? 'text-amber-600' : 'text-red-600'
-                      )}>
-                        {log.winRate}% WR
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        {log.lessons.length} lessons
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
         </>
       )}
     </div>

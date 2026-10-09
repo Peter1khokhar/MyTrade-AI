@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
 import { Plus_Jakarta_Sans, Inter, JetBrains_Mono } from 'next/font/google';
 import { Toaster } from 'sonner';
+import { ThemeProvider } from '@/components/providers/theme-provider';
 import './globals.css';
 
-// 🎨 Headings Font - Modern & Elegant
 const jakarta = Plus_Jakarta_Sans({
   subsets: ['latin'],
   variable: '--font-heading',
@@ -11,7 +11,6 @@ const jakarta = Plus_Jakarta_Sans({
   weight: ['400', '500', '600', '700', '800'],
 });
 
-// 📖 Body Font - Clean & Readable
 const inter = Inter({
   subsets: ['latin'],
   variable: '--font-body',
@@ -19,7 +18,6 @@ const inter = Inter({
   weight: ['400', '500', '600', '700'],
 });
 
-// 🔢 Numbers Font - Monospace for trading data
 const jetbrainsMono = JetBrains_Mono({
   subsets: ['latin'],
   variable: '--font-mono',
@@ -40,10 +38,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${jakarta.variable} ${inter.variable} ${jetbrainsMono.variable}`}>
-      <body className="font-body antialiased">
-        {children}
-        <Toaster position="top-right" richColors />
+    <html lang="en" suppressHydrationWarning>
+      <body className={`${jakarta.variable} ${inter.variable} ${jetbrainsMono.variable} font-body antialiased`}>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="light"
+          enableSystem
+          disableTransitionOnChange
+        >
+          {children}
+          <Toaster position="top-right" richColors />
+        </ThemeProvider>
       </body>
     </html>
   );

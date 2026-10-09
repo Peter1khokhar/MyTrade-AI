@@ -3,84 +3,131 @@ import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import connectDB from '@/lib/db/connect';
 import User from '@/lib/db/models/User';
+import { generateOTP, hashOTP } from '@/lib/auth/otp';
+import { resend, EMAIL_FROM } from '@/lib/email/resend';
+import { generateOTPEmailHTML } from '@/lib/email/templates/otp-email';
 
-// Validation schema
 const registerSchema = z.object({
-  name: z.string().min(2, 'Name कम से कम 2 characters का होना चाहिए').max(50),
-  email: z.string().email('सही email address डालो'),
-  password: z.string().min(6, 'Password कम से कम 6 characters का होना चाहिए'),
+  name: z.string().min(2, 'Name must be at least 2 characters').max(50),
+  email: z.string().email('Invalid email'),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
 });
+
+const OTP_EXPIRY_MINUTES = 10;
 
 export async function POST(req: Request) {
   try {
     console.log('📝 Register request received');
-    
+
     const body = await req.json();
-    console.log('📦 Body:', { ...body, password: '***' });
-    
-    // Validate data
     const validation = registerSchema.safeParse(body);
-    
+
     if (!validation.success) {
-      const errors = validation.error.issues.map((e) => e.message);
-      console.log('❌ Validation failed:', errors);
       return NextResponse.json(
-        { success: false, message: errors[0] },
+        { success: false, message: validation.error.issues[0].message },
         { status: 400 }
       );
     }
-    
+
     const { name, email, password } = validation.data;
-    
+
     await connectDB();
-    
-    // Check if user already exists
+
     const existingUser = await User.findOne({ email: email.toLowerCase() });
-    
+
     if (existingUser) {
-      console.log('❌ User already exists:', email);
-      return NextResponse.json(
-        { success: false, message: 'इस email से account पहले से है' },
-        { status: 409 }
-      );
+      if (existingUser.isEmailVerified) {
+        return NextResponse.json(
+          { success: false, message: 'This email is already registered' },
+          { status: 409 }
+        );
+      }
+      // Existing unverified user - allow re-register (will overwrite)
+      console.log('⚠️ Unverified user exists, updating...');
     }
-    
-    // Hash password
+
+    // 🔐 Hash password
     const hashedPassword = await bcrypt.hash(password, 12);
-    console.log('🔐 Password hashed');
-    
-    // Create user
-    const user = await User.create({
-      name,
-      email: email.toLowerCase(),
-      password: hashedPassword,
-      plan: 'free',
-      watchlist: ['EURUSD', 'GBPUSD', 'XAUUSD'],
+
+    // 🔢 Generate OTP
+    const otp = generateOTP();
+    const hashedOTP = hashOTP(otp);
+
+    // 💾 Create or update user
+    let user;
+    if (existingUser) {
+      existingUser.name = name;
+      existingUser.password = hashedPassword;
+      existingUser.emailVerificationCode = hashedOTP;
+      existingUser.emailVerificationExpiry = new Date(
+        Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000
+      );
+      existingUser.lastVerificationSentAt = new Date();
+      existingUser.emailVerificationAttempts = 0;
+      await existingUser.save();
+      user = existingUser;
+    } else {
+      user = await User.create({
+        name,
+        email: email.toLowerCase(),
+        password: hashedPassword,
+        plan: 'free',
+        watchlist: ['EURUSD', 'GBPUSD', 'XAUTUSD'],
+        isEmailVerified: false,
+        emailVerificationCode: hashedOTP,
+        emailVerificationExpiry: new Date(
+          Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000
+        ),
+        lastVerificationSentAt: new Date(),
+        emailVerificationAttempts: 0,
+      });
+    }
+
+    console.log(`✅ User created: ${user.email}, OTP: ${otp}`);
+
+    // 📧 Send verification email
+    const { error: emailError } = await resend.emails.send({
+      from: EMAIL_FROM,
+      to: email,
+      subject: 'Verify your TradeSage AI account',
+      html: generateOTPEmailHTML({
+        name: user.name,
+        otp,
+        expiresInMinutes: OTP_EXPIRY_MINUTES,
+      }),
     });
-    
-    console.log('✅ User created:', user.email);
-    
+
+    if (emailError) {
+      console.error('❌ Email send failed:', emailError);
+      // User is created, but email failed - still return success with warning
+      return NextResponse.json({
+        success: true,
+        message: 'Account created. Email sending failed - use resend.',
+        requiresVerification: true,
+        email: email.toLowerCase(),
+        emailWarning: true,
+      });
+    }
+
+    console.log(`📧 Verification email sent to ${email}`);
+
     return NextResponse.json(
       {
         success: true,
-        message: '🎉 Account successfully बन गया!',
-        user: {
-          id: user._id.toString(),
-          name: user.name,
-          email: user.email,
-          plan: user.plan,
-        },
+        message: '🎉 Account created! Check your email for verification code.',
+        requiresVerification: true,
+        email: email.toLowerCase(),
+        expiresInSeconds: OTP_EXPIRY_MINUTES * 60,
       },
       { status: 201 }
     );
-    
+
   } catch (error) {
     console.error('❌ Register error:', error);
-    
     return NextResponse.json(
       {
         success: false,
-        message: error instanceof Error ? error.message : 'कुछ गलत हो गया',
+        message: error instanceof Error ? error.message : 'Registration failed',
       },
       { status: 500 }
     );
