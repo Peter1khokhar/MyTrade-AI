@@ -147,3 +147,47 @@
 @utility bg-warning {
   background-color: rgb(var(--warning));
 }
+
+/* ═══════════════════════════════════════════════════════════
+   🎨 ADMIN MINIMAL CARDS (Borderless Design)
+   ═══════════════════════════════════════════════════════════ */
+
+/* Card base - no border, subtle bg */
+.admin-card {
+  background-color: #FFFFFF;
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  transition: all 0.2s ease;
+}
+
+.admin-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  transform: translateY(-1px);
+}
+
+.dark .admin-card {
+  background-color: #16161D;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.dark .admin-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  background-color: #1A1A1F;
+}
+
+/* Light background cards (secondary) */
+.admin-card-subtle {
+  background-color: #F8F8F6;
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+
+.dark .admin-card-subtle {
+  background-color: #1F1F26;
+}
+
+/* Fonts - thin */
+.font-thin-text {
+  font-weight: 300;
+  letter-spacing: -0.01em;
+}

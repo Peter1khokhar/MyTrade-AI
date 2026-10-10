@@ -4,10 +4,23 @@ export interface IUser extends Document {
   _id: mongoose.Types.ObjectId;
   name: string;
   email: string;
-  password?: string;           // ⚠️ Optional for Google users
-  image?: string;              // 🆕 Google avatar
-  provider?: 'credentials' | 'google';  // 🆕 Login method
-  plan: 'free' | 'pro' | 'premium';
+  password?: string;
+  image?: string;
+  provider?: 'credentials' | 'google';
+  
+  // Plan & Subscription
+  plan: 'free' | 'free_trial' | 'weekly' | 'monthly' | 'special';
+  planExpiry?: Date;
+  isSpecial: boolean;
+  specialNote?: string;
+  
+  // Stats
+  totalSpent: number;
+  lastActiveAt: Date;
+  
+  // Role
+  role: 'user' | 'admin';
+  
   watchlist: string[];
   
   // Email Verification
@@ -16,13 +29,13 @@ export interface IUser extends Document {
   emailVerificationExpiry?: Date;
   emailVerificationAttempts: number;
   lastVerificationSentAt?: Date;
-
-  // Password Reset feild
+  
+  // Password Reset
   passwordResetCode?: string;
   passwordResetExpiry?: Date;
   passwordResetAttempts: number;
   lastPasswordResetSentAt?: Date;
-  passwordResetVerified?: boolean;  // After OTP verified, before password set
+  passwordResetVerified?: boolean;
   
   createdAt: Date;
   updatedAt: Date;
@@ -50,29 +63,58 @@ const UserSchema = new Schema<IUser>(
     },
     password: {
       type: String,
-      required: false,  // ⚠️ Changed - optional for Google users
+      required: false,
       minlength: [6, 'Password कम से कम 6 characters का होना चाहिए'],
       select: false,
     },
-    image: {
-      type: String,  // 🆕 Google avatar URL
-    },
+    image: String,
     provider: {
       type: String,
       enum: ['credentials', 'google'],
       default: 'credentials',
     },
+    
+    // Plan
     plan: {
       type: String,
-      enum: ['free', 'pro', 'premium'],
+      enum: ['free', 'free_trial', 'weekly', 'monthly', 'special'],
       default: 'free',
+      index: true,
     },
+    planExpiry: {
+      type: Date,
+      index: true,
+    },
+    isSpecial: {
+      type: Boolean,
+      default: false,
+    },
+    specialNote: String,
+    
+    // Stats
+    totalSpent: {
+      type: Number,
+      default: 0,
+    },
+    lastActiveAt: {
+      type: Date,
+      default: Date.now,
+    },
+    
+    // Role
+    role: {
+      type: String,
+      enum: ['user', 'admin'],
+      default: 'user',
+      index: true,
+    },
+    
     watchlist: {
       type: [String],
       default: ['EURUSD', 'GBPUSD', 'XAUTUSD'],
     },
     
-    // Email Verification Fields
+    // Email Verification
     isEmailVerified: {
       type: Boolean,
       default: false,
@@ -93,8 +135,8 @@ const UserSchema = new Schema<IUser>(
       type: Date,
       select: false,
     },
-  
-      // 🆕 Password Reset Fields
+    
+    // Password Reset
     passwordResetCode: {
       type: String,
       select: false,
@@ -123,6 +165,8 @@ const UserSchema = new Schema<IUser>(
 );
 
 UserSchema.index({ email: 1 });
+UserSchema.index({ plan: 1, planExpiry: 1 });
+UserSchema.index({ createdAt: -1 });
 
 const User: Model<IUser> =
   mongoose.models.User || mongoose.model<IUser>('User', UserSchema);

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
+import { Crown } from 'lucide-react';
 import { staggerContainer, slideInLeft } from '@/lib/animations';
 import {
   LayoutDashboard,
@@ -23,6 +24,7 @@ const menuItems = [
   { title: 'Watchlist', href: '/watchlist', icon: Star },
   { title: 'History', href: '/history', icon: History },
   { title: 'AI Learning', href: '/learning', icon: Brain },
+  { title: 'Pricing', href: '/pricing', icon: Crown },
   { title: 'Settings', href: '/settings', icon: Settings },
 ];
 
