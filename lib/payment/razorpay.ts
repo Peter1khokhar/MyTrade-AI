@@ -1,17 +1,36 @@
 import Razorpay from 'razorpay';
+import crypto from 'crypto';
 
 // ═══════════════════════════════════════════════════════════
-// 💰 Razorpay Client
+// 💰 Razorpay Client (Lazy Initialization)
 // ═══════════════════════════════════════════════════════════
 
-if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
-  console.warn('⚠️ Razorpay keys not set - payments will not work');
+let razorpayClient: Razorpay | null = null;
+
+function getRazorpayClient(): Razorpay {
+  if (!razorpayClient) {
+    const keyId = process.env.RAZORPAY_KEY_ID;
+    const keySecret = process.env.RAZORPAY_KEY_SECRET;
+
+    if (!keyId || !keySecret) {
+      console.warn('⚠️ Razorpay keys not set - payments will not work');
+    }
+
+    razorpayClient = new Razorpay({
+      key_id: keyId || 'placeholder_key_id',
+      key_secret: keySecret || 'placeholder_key_secret',
+    });
+  }
+
+  return razorpayClient;
 }
 
-export const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID || '',
-  key_secret: process.env.RAZORPAY_KEY_SECRET || '',
-});
+// Export getter for lazy use
+export const razorpay = {
+  orders: {
+    create: (options: any) => getRazorpayClient().orders.create(options),
+  },
+};
 
 // ═══════════════════════════════════════════════════════════
 // 📋 Plan Configuration
@@ -21,14 +40,14 @@ export const PLANS = {
   weekly: {
     id: 'weekly',
     name: 'Weekly Pro',
-    amount: 140,        // INR
+    amount: 140,
     durationDays: 7,
     description: '7 days of unlimited signals',
   },
   monthly: {
     id: 'monthly',
     name: 'Monthly Pro',
-    amount: 499,        // INR
+    amount: 499,
     durationDays: 30,
     description: '30 days of unlimited signals',
   },
@@ -44,7 +63,7 @@ export const PLANS = {
 export type PlanId = keyof typeof PLANS;
 
 // ═══════════════════════════════════════════════════════════
-// 🎯 Helper: Create Razorpay Order
+// 🎯 Create Razorpay Order
 // ═══════════════════════════════════════════════════════════
 
 export async function createRazorpayOrder({
@@ -53,14 +72,15 @@ export async function createRazorpayOrder({
   receipt,
   notes,
 }: {
-  amount: number;      // INR (will convert to paise)
+  amount: number;
   currency?: string;
   receipt: string;
   notes?: Record<string, string>;
 }) {
   try {
-    const order = await razorpay.orders.create({
-      amount: Math.round(amount * 100),  // Convert to paise
+    const client = getRazorpayClient();
+    const order = await client.orders.create({
+      amount: Math.round(amount * 100),
       currency,
       receipt,
       notes: notes || {},
@@ -74,10 +94,8 @@ export async function createRazorpayOrder({
 }
 
 // ═══════════════════════════════════════════════════════════
-// 🔐 Helper: Verify Payment Signature
+// 🔐 Verify Payment Signature
 // ═══════════════════════════════════════════════════════════
-
-import crypto from 'crypto';
 
 export function verifyPaymentSignature({
   orderId,
@@ -103,7 +121,7 @@ export function verifyPaymentSignature({
 }
 
 // ═══════════════════════════════════════════════════════════
-// 📅 Helper: Calculate Expiry Date
+// 📅 Calculate Expiry Date
 // ═══════════════════════════════════════════════════════════
 
 export function calculateExpiry(durationDays: number, from?: Date): Date {
