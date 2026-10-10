@@ -1,35 +1,31 @@
 import type { Metadata } from 'next';
-import { Plus_Jakarta_Sans, Inter, JetBrains_Mono } from 'next/font/google';
+import { Inter, Playfair_Display } from 'next/font/google';
 import { Toaster } from 'sonner';
 import { ThemeProvider } from '@/components/providers/theme-provider';
 import './globals.css';
 
-const jakarta = Plus_Jakarta_Sans({
-  subsets: ['latin'],
-  variable: '--font-heading',
-  display: 'swap',
-  weight: ['400', '500', '600', '700', '800'],
-});
-
+// 🎨 Corporate Font - Inter
 const inter = Inter({
   subsets: ['latin'],
   variable: '--font-body',
   display: 'swap',
-  weight: ['400', '500', '600', '700'],
+  weight: ['300', '400', '500', '600', '700'],
 });
 
-const jetbrainsMono = JetBrains_Mono({
+// ✨ Elegant Font - Playfair Display (special words के लिए)
+const playfair = Playfair_Display({
   subsets: ['latin'],
-  variable: '--font-mono',
+  variable: '--font-fancy',
   display: 'swap',
   weight: ['400', '500', '600', '700'],
+  style: ['normal', 'italic'],
 });
 
 export const metadata: Metadata = {
-  title: 'TradeSage AI - Forex Trading Signals',
-  description: 'AI-powered forex trading signals with ICT/SMC strategy',
+  title: 'MyTrade AI — AI-Powered Forex Signals',
+  description: 'AI-powered Forex trading signals with institutional-grade ICT/SMC analysis. Built for serious traders.',
   keywords: ['forex', 'trading', 'signals', 'AI', 'ICT', 'SMC', 'gold', 'silver'],
-  authors: [{ name: 'TradeSage AI' }],
+  authors: [{ name: 'MyTrade AI' }],
 };
 
 export default function RootLayout({
@@ -39,7 +35,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${jakarta.variable} ${inter.variable} ${jetbrainsMono.variable} font-body antialiased`}>
+      <body
+        className={`${inter.variable} ${playfair.variable} font-body antialiased`}
+      >
         <ThemeProvider
           attribute="class"
           defaultTheme="light"
