@@ -32,9 +32,17 @@ export async function GET() {
         id: user._id.toString(),
         name: user.name,
         email: user.email,
+        image: user.image,
         plan: user.plan,
+        planExpiry: user.planExpiry,
+        isSpecial: user.isSpecial,
+        specialNote: user.specialNote,
         watchlist: user.watchlist,
         createdAt: user.createdAt,
+        lastActiveAt: user.lastActiveAt,
+        totalSpent: user.totalSpent,
+        telegramConnected: user.telegramConnected || false,
+        telegramUsername: user.telegramUsername,
       },
     });
   } catch (error) {

@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { Crown } from 'lucide-react';
 import { staggerContainer, slideInLeft } from '@/lib/animations';
+import { User } from 'lucide-react';
 import {
   LayoutDashboard,
   TrendingUp,
@@ -25,6 +26,7 @@ const menuItems = [
   { title: 'History', href: '/history', icon: History },
   { title: 'AI Learning', href: '/learning', icon: Brain },
   { title: 'Pricing', href: '/pricing', icon: Crown },
+  { title: 'Profile', href: '/profile', icon: User },
   { title: 'Settings', href: '/settings', icon: Settings },
 ];
 

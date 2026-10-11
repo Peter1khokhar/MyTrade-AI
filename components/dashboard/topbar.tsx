@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { LogOut, Menu, User, Settings } from 'lucide-react';
+import { LogOut, Menu, User, Settings, UserCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
 import { useNotifications } from '@/lib/context/notification-context';
@@ -135,10 +135,10 @@ export function Topbar({ userName, userEmail }: TopbarProps) {
               </div>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuItem disabled>
-                <User className="w-4 h-4 mr-2" />
-                Profile
-              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => router.push('/profile')}>
+              <UserCircle className="w-4 h-4 mr-2" />
+              My Profile
+            </DropdownMenuItem>
               <DropdownMenuItem onClick={() => router.push('/settings')}>
                 <Settings className="w-4 h-4 mr-2" />
                 Settings
