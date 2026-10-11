@@ -10,7 +10,7 @@ import {
   History,
   Settings,
   Zap,
-  Brain,
+  Brain, Crown, User
 } from 'lucide-react';
 
 const menuItems = [
@@ -20,6 +20,8 @@ const menuItems = [
   { title: 'Watchlist', href: '/watchlist', icon: Star },
   { title: 'History', href: '/history', icon: History },
   { title: 'AI Learning', href: '/learning', icon: Brain },
+   { title: 'Pricing', href: '/pricing', icon: Crown },        
+  { title: 'Profile', href: '/profile', icon: User },  
   { title: 'Settings', href: '/settings', icon: Settings },
 ];
 
