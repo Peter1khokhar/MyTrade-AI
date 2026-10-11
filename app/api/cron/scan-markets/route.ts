@@ -4,6 +4,7 @@ import User from '@/lib/db/models/User';
 import Notification from '@/lib/db/models/Notification';
 import { getSingleTick, getOHLC } from '@/lib/market/biquote';
 import { analyzeICTSetup } from '@/lib/ai/market-scanner';
+import { sendTelegramMessage, formatSignalMessage } from '@/lib/telegram/send';
 
 // ═══════════════════════════════════════════════════════════
 // 🔐 Verify Cron Secret
@@ -160,6 +161,35 @@ export async function POST(req: Request) {
 
         notificationsCreated++;
         console.log(`   📬 Notification for ${user.email} - ${pair}`);
+
+        // 🆕 Send Telegram message
+        if (user.telegramConnected && user.telegramChatId) {
+          try {
+            const message = formatSignalMessage({
+              pair,
+              signal: analysis.signal,
+              confidence: analysis.confidence,
+              entryPrice: analysis.entryPrice,
+              stopLoss: analysis.stopLoss,
+              takeProfit: analysis.takeProfit,
+              timeframe: analysis.timeframe,
+              strategy: analysis.strategy,
+              reason: analysis.reason,
+              confluenceScore: analysis.confluenceScore,
+            });
+
+            await sendTelegramMessage(user.telegramChatId, message);
+            console.log(`   📱 Telegram sent to ${user.email}`);
+
+            // Mark notification as telegram sent
+            await Notification.updateOne(
+              { userId: user._id, pair, isTelegramSent: false },
+              { isTelegramSent: true }
+            );
+          } catch (telegramError) {
+            console.error(`   ❌ Telegram failed for ${user.email}:`, telegramError);
+          }
+        }
       }
     }
 
