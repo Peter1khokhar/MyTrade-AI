@@ -20,6 +20,11 @@ export interface IUser extends Document {
   
   // Role
   role: 'user' | 'admin';
+
+   // 🆕 Telegram
+  telegramChatId?: string;
+  telegramUsername?: string;
+  telegramConnected: boolean;
   
   watchlist: string[];
   
@@ -107,6 +112,18 @@ const UserSchema = new Schema<IUser>(
       enum: ['user', 'admin'],
       default: 'user',
       index: true,
+    },
+
+    // 🆕 Telegram
+    telegramChatId: {
+      type: String,
+      index: true,
+      sparse: true,
+    },
+    telegramUsername: String,
+    telegramConnected: {
+      type: Boolean,
+      default: false,
     },
     
     watchlist: {

@@ -3,8 +3,12 @@
 import { useState } from 'react';
 import { signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { LogOut, Menu, User, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { motion } from 'framer-motion';
+import { useNotifications } from '@/lib/context/notification-context';
+import { Bell } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,6 +35,7 @@ export function Topbar({ userName, userEmail }: TopbarProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [showGoodbye, setShowGoodbye] = useState(false);
+  const { unreadCount } = useNotifications();
 
   const handleLogout = async () => {
     setIsLoading(true);
@@ -88,6 +93,29 @@ export function Topbar({ userName, userEmail }: TopbarProps) {
 
         {/* Right - Theme Toggle + User Menu */}
         <div className="flex items-center gap-2 lg:gap-3">
+          <Link href="/notifications">
+  <button className="relative inline-flex items-center justify-center w-10 h-10 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+    <Bell className="w-5 h-5 text-slate-700 dark:text-slate-300" />
+    
+    {/* Badge */}
+{unreadCount > 0 && (
+  <motion.span
+    initial={{ scale: 0 }}
+    animate={{ 
+      scale: [1, 1.15, 1],
+    }}
+    transition={{
+      duration: 2,
+      repeat: Infinity,
+      ease: 'easeInOut',
+    }}
+    className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-red-500 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-lg"
+  >
+    {unreadCount > 99 ? '99+' : unreadCount}
+  </motion.span>
+)}
+  </button>
+</Link>
           <ThemeToggle />
 
           <DropdownMenu>

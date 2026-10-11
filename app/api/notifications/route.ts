@@ -58,40 +58,6 @@ export async function GET(req: Request) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// 🗑️ DELETE - Clear All Notifications
-// ═══════════════════════════════════════════════════════════
-
-export async function DELETE() {
-  try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { success: false, message: 'Login zaroori hai' },
-        { status: 401 }
-      );
-    }
-
-    await connectDB();
-
-    const result = await Notification.deleteMany({
-      userId: session.user.id,
-    });
-
-    return NextResponse.json({
-      success: true,
-      message: `${result.deletedCount} notifications deleted`,
-    });
-
-  } catch (error) {
-    console.error('❌ Delete notifications error:', error);
-    return NextResponse.json(
-      { success: false, message: 'Failed to delete' },
-      { status: 500 }
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════════
 // ✅ PATCH - Mark as Read
 // ═══════════════════════════════════════════════════════════
 
@@ -111,7 +77,6 @@ export async function PATCH(req: Request) {
     const { notificationId, markAll } = body;
 
     if (markAll) {
-      // Mark all as read
       await Notification.updateMany(
         { userId: session.user.id, isRead: false },
         { isRead: true }
@@ -144,6 +109,40 @@ export async function PATCH(req: Request) {
     console.error('❌ Mark as read error:', error);
     return NextResponse.json(
       { success: false, message: 'Failed to mark as read' },
+      { status: 500 }
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// 🗑️ DELETE - Clear All
+// ═══════════════════════════════════════════════════════════
+
+export async function DELETE() {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { success: false, message: 'Login zaroori hai' },
+        { status: 401 }
+      );
+    }
+
+    await connectDB();
+
+    const result = await Notification.deleteMany({
+      userId: session.user.id,
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: `${result.deletedCount} notifications deleted`,
+    });
+
+  } catch (error) {
+    console.error('❌ Delete notifications error:', error);
+    return NextResponse.json(
+      { success: false, message: 'Failed to delete' },
       { status: 500 }
     );
   }
