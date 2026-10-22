@@ -151,6 +151,41 @@ export async function getOHLC(
   }
 }
 
+export async function getOHLCWithVolume(
+  symbol: string,
+  interval: string = '15m',
+  limit: number = 100
+): Promise<any[]> {
+  try {
+    // Yahoo Finance se volume ke saath
+    const yahooInterval = interval === '15m' ? '15m' : interval;
+    const range = interval === '15m' ? '1d' : '5d';
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=${yahooInterval}&range=${range}`;
+    
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
+    
+    const data = await response.json();
+    const result = data.chart.result[0];
+    const quote = result.indicators.quote[0];
+    
+    return result.timestamp.map((ts: number, i: number) => ({
+      time: ts,
+      open: quote.open[i],
+      high: quote.high[i],
+      low: quote.low[i],
+      close: quote.close[i],
+      volume: quote.volume[i],
+    }));
+  } catch (error) {
+    console.error(`❌ Error fetching OHLC for ${symbol}:`, error);
+    return [];
+  }
+}
+
 export async function getEconomicCalendar(): Promise<any[]> {
   try {
     const events: any = await bq.calendar({ importance: 'high' });

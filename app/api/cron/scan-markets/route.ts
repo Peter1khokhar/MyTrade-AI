@@ -9,78 +9,79 @@ import { sendTelegramMessage, formatSignalMessage } from '@/lib/telegram/send';
 // ═══════════════════════════════════════════════════════════
 // 🔐 Verify Cron Secret
 // ═══════════════════════════════════════════════════════════
-
 function verifyCronSecret(req: Request): boolean {
   const authHeader = req.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET;
 
   if (!cronSecret) {
-    console.error('❌ CRON_SECRET not set');
+    console.error('❌ CRON_SECRET not set in env');
     return false;
   }
-
   return authHeader === `Bearer ${cronSecret}`;
 }
 
 // ═══════════════════════════════════════════════════════════
-// 🎯 POST - Scan Markets (Called by cron-job.org)
+// 🎯 POST - Scan Markets
 // ═══════════════════════════════════════════════════════════
-
 export async function POST(req: Request) {
   const startTime = Date.now();
 
   try {
-    // 1. Verify authentication
+    // 1. Verify Auth
     if (!verifyCronSecret(req)) {
-      console.log('❌ Unauthorized scan attempt');
-      return NextResponse.json(
-        { success: false, message: 'Unauthorized' },
-        { status: 401 }
-      );
+      return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 
     console.log(`\n${'='.repeat(60)}`);
     console.log(`🔍 Market Scanner Started: ${new Date().toISOString()}`);
     console.log(`${'='.repeat(60)}`);
 
+    // 2. Killzone filter (Optional - Testing ke liye comment out kar sakte ho)
+    const now = new Date();
+    const istHour = parseInt(
+      now.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', hour12: false })
+    );
+    const isLondonKillzone = istHour >= 12 && istHour <= 15;
+    const isNYKillzone = istHour >= 17 && istHour <= 20;
+
+    // ⚠️ Testing ke liye abhi isko bypass kar rahe hain. 
+    // Production mein isko uncomment kar dena.
+    /*
+    if (!isLondonKillzone && !isNYKillzone) {
+      console.log(`⏰ Outside killzone (IST ${istHour}:00) - skipping scan`);
+      return NextResponse.json({ success: true, message: 'Outside killzone' });
+    }
+    */
+
     await connectDB();
 
-    // 2. Get all users with active plans (only Pro users)
+    // 3. Get users
     const users = await User.find({
-      // plan: { $in: ['weekly', 'monthly', 'special', 'free_trial'] },
-      // $or: [
-      //   { planExpiry: { $gt: new Date() } },
-      //   { plan: 'special' },
-      // ],
       watchlist: { $exists: true, $ne: [] },
-    }).select('_id name email watchlist plan telegramChatId telegramConnected');
+    }).select('_id name email watchlist telegramChatId telegramConnected');
 
     console.log(`👥 Users to scan for: ${users.length}`);
 
     if (users.length === 0) {
-      return NextResponse.json({
-        success: true,
-        message: 'No active users to scan for',
-        usersScanned: 0,
-      });
+      return NextResponse.json({ success: true, message: 'No active users', usersScanned: 0 });
     }
 
-    // 3. Collect all unique pairs from all users
+    // 4. Collect unique pairs
     const allPairs = new Set<string>();
     users.forEach((user) => {
       user.watchlist.forEach((pair: string) => allPairs.add(pair));
     });
 
-    console.log(`📊 Unique pairs to analyze: ${Array.from(allPairs).join(', ')}`);
+    console.log(`📊 Unique pairs: ${Array.from(allPairs).join(', ')}`);
 
-    // 4. Analyze each pair (only once per pair)
+    // 5. Analyze pairs
     const pairAnalysis = new Map();
 
     for (const pair of allPairs) {
       try {
         console.log(`\n🎯 Analyzing ${pair}...`);
 
-        // Fetch multi-timeframe data
+        // Fetch data
         const [tick, h4Data, h1Data, m15Data] = await Promise.all([
           getSingleTick(pair),
           getOHLC(pair, '4h', 50),
@@ -93,13 +94,13 @@ export async function POST(req: Request) {
           continue;
         }
 
-        // Run ICT analysis
+        // ✅ FIX: Properly structured params
         const analysis = await analyzeICTSetup({
-          pair,
-          currentPrice: tick.price,
-          h4Data,
-          h1Data,
-          m15Data,
+          pair: pair,
+          currentPrice: tick?.price || 0,
+          h4Data: h4Data,
+          h1Data: h1Data,
+          m15Data: m15Data,
         });
 
         console.log(`   📈 Signal: ${analysis.signal} (${analysis.confidence}%)`);
@@ -107,9 +108,9 @@ export async function POST(req: Request) {
 
         if (analysis.signal !== 'HOLD' && analysis.confidence >= 70) {
           pairAnalysis.set(pair, analysis);
-          console.log(`   ✅ Valid signal for ${pair}!`);
+          console.log(`   ✅ Valid signal!`);
         } else {
-          console.log(`   ⏭️ Skipped (insufficient confluence)`);
+          console.log(`   ⏭️ Skipped (low confidence)`);
         }
 
       } catch (error) {
@@ -117,11 +118,7 @@ export async function POST(req: Request) {
       }
     }
 
-    console.log(`\n${'='.repeat(60)}`);
-    console.log(`✅ Found ${pairAnalysis.size} valid signals`);
-    console.log(`${'='.repeat(60)}`);
-
-    // 5. Create notifications for users whose pairs have signals
+    // 6. Create notifications
     let notificationsCreated = 0;
 
     for (const user of users) {
@@ -129,24 +126,12 @@ export async function POST(req: Request) {
         const analysis = pairAnalysis.get(pair);
         if (!analysis) continue;
 
-        // Check if similar notification exists in last hour
-        const existingNotification = await Notification.findOne({
-          userId: user._id,
-          pair,
-          createdAt: { $gte: new Date(Date.now() - 60 * 60 * 1000) },
-        });
-
-        if (existingNotification) {
-          console.log(`   ⏭️ Recent notification exists for ${user.email} - ${pair}`);
-          continue;
-        }
-
-        // Create notification
+        // Save Notification
         await Notification.create({
           userId: user._id,
           type: 'signal',
           title: `🎯 ${analysis.signal} Signal: ${pair}`,
-          message: `${analysis.signal} setup detected on ${pair} with ${analysis.confidence}% confidence. Entry: ${analysis.entryPrice}, SL: ${analysis.stopLoss}, TP: ${analysis.takeProfit}`,
+          message: `${analysis.signal} setup detected with ${analysis.confidence}% confidence.`,
           pair: pair,
           signal: analysis.signal,
           confidence: analysis.confidence,
@@ -160,47 +145,27 @@ export async function POST(req: Request) {
         });
 
         notificationsCreated++;
-        console.log(`   📬 Notification for ${user.email} - ${pair}`);
 
-        // 🆕 Send Telegram message
+        // Send Telegram
         if (user.telegramConnected && user.telegramChatId) {
           try {
             const message = formatSignalMessage({
-              pair,
-              signal: analysis.signal,
-              confidence: analysis.confidence,
-              entryPrice: analysis.entryPrice,
-              stopLoss: analysis.stopLoss,
-              takeProfit: analysis.takeProfit,
-              timeframe: analysis.timeframe,
-              strategy: analysis.strategy,
-              reason: analysis.reason,
+              pair, signal: analysis.signal, confidence: analysis.confidence,
+              entryPrice: analysis.entryPrice, stopLoss: analysis.stopLoss,
+              takeProfit: analysis.takeProfit, timeframe: analysis.timeframe,
+              strategy: analysis.strategy, reason: analysis.reason,
               confluenceScore: analysis.confluenceScore,
             });
-
             await sendTelegramMessage(user.telegramChatId, message);
             console.log(`   📱 Telegram sent to ${user.email}`);
-
-            // Mark notification as telegram sent
-            await Notification.updateOne(
-              { userId: user._id, pair, isTelegramSent: false },
-              { isTelegramSent: true }
-            );
-          } catch (telegramError) {
-            console.error(`   ❌ Telegram failed for ${user.email}:`, telegramError);
+          } catch (err) {
+            console.error(`   ❌ Telegram failed:`, err);
           }
         }
       }
     }
 
     const duration = Date.now() - startTime;
-
-    console.log(`\n🎉 Scan complete in ${duration}ms`);
-    console.log(`   Users: ${users.length}`);
-    console.log(`   Pairs analyzed: ${allPairs.size}`);
-    console.log(`   Valid signals: ${pairAnalysis.size}`);
-    console.log(`   Notifications: ${notificationsCreated}`);
-    console.log(`${'='.repeat(60)}\n`);
 
     return NextResponse.json({
       success: true,
@@ -217,16 +182,12 @@ export async function POST(req: Request) {
   } catch (error) {
     console.error('❌ Scanner error:', error);
     return NextResponse.json(
-      {
-        success: false,
-        message: error instanceof Error ? error.message : 'Scan failed',
-      },
+      { success: false, message: error instanceof Error ? error.message : 'Scan failed' },
       { status: 500 }
     );
   }
 }
 
-// Also allow GET for easy testing
 export async function GET(req: Request) {
   return POST(req);
 }
