@@ -229,18 +229,11 @@ Reply with **ONLY valid JSON**, no markdown, no explanation outside JSON:
   }
 }
 
-**CRITICAL RULES:**
-1. If killzone quality = "AVOID" → MUST return "HOLD"
-2. If H4 bias is NEUTRAL → MUST return "HOLD"
-3. If entryPrice == stopLoss → invalid, use ATR-based SL
-4. Use ATR to calculate realistic SL/TP:
-   - SL = entry ± (1.5 × ATR)
-   - TP1 = entry ± (2 × ATR)
-   - TP2 = entry ± (3 × ATR)
-   - TP3 = entry ± (5 × ATR)
-5. Round all prices to 5 decimal places
-6. If signal = "HOLD", entryPrice/SL/TP can be 0
-7. Confidence MUST match qualityScore: 50-60 for WEAK, 60-75 for GOOD, 75-90 for STRONG
+**CRITICAL RULES FOR MANUAL GENERATION:**
+1. You MUST return a "BUY" or "SELL" signal. DO NOT return "HOLD". The user has requested a signal.
+2. If the setup is not perfect, still provide the signal but lower the Quality Score (1-4 = WEAK, 5-7 = MEDIUM, 8-10 = STRONG).
+3. Mention clearly in the "warnings" array what is missing (e.g., "No killzone", "Volume is low", "H4 bias is neutral").
+4. Base your entry, SL, and TP on ATR so risk is managed.
 
 Now analyze ${pair} and return ONLY the JSON.
 `.trim();

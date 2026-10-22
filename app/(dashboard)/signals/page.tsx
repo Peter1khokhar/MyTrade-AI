@@ -68,6 +68,17 @@ export default function SignalsPage() {
       }
 
       setSignal(data.signal);
+      // Quality ke hisaab se toast message badlo
+      const score = data.signal.qualityScore || 0;
+      if (score >= 8) {
+        toast.success('🔥 High Quality Signal Generated!');
+        setShowSuccess(true);
+        setTimeout(() => setShowSuccess(false), 1800);
+      } else if (score >= 5) {
+        toast.info('⚖️ Medium Quality Signal. Manage your risk.');
+      } else {
+        toast.warning('⚠️ Weak Setup. Trade with caution or wait.');
+      }
       
       // 🎉 Show celebration animation
       setShowSuccess(true);

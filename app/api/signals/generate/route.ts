@@ -213,16 +213,16 @@ export async function POST(req: Request) {
     console.log(`📝 Signal: ${aiSignal.signal} (${aiSignal.confidence}% / Quality: ${aiSignal.qualityScore}/10)`);
 
     // ── Quality gate ──
-    if (aiSignal.signal === 'HOLD' || aiSignal.qualityLabel === 'REJECT') {
-      console.log(`⛔ Rejected signal — Quality: ${aiSignal.qualityScore}/10`);
-      return NextResponse.json({
-        success: true,
-        signal: null,
-        message: aiSignal.reason || 'No high-quality setup found',
-        qualityScore: aiSignal.qualityScore,
-        warnings: aiSignal.warnings || [],
-      });
-    }
+    // if (aiSignal.signal === 'HOLD' || aiSignal.qualityLabel === 'REJECT') {
+    //   console.log(`⛔ Rejected signal — Quality: ${aiSignal.qualityScore}/10`);
+    //   return NextResponse.json({
+    //     success: true,
+    //     signal: null,
+    //     message: aiSignal.reason || 'No high-quality setup found',
+    //     qualityScore: aiSignal.qualityScore,
+    //     warnings: aiSignal.warnings || [],
+    //   });
+    // }
 
     // ── Save signal ──
     const savedSignal = await Signal.create({

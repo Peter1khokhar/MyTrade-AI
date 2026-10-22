@@ -30,6 +30,31 @@ export function SignalResult({ signal }: SignalResultProps) {
   const SignalIcon = isBuy ? TrendingUp : isSell ? TrendingDown : Minus;
 
   return (
+    <>
+    {/* Signal ke top pe add karo */}
+<div className="flex justify-between items-center mb-4">
+  <span className={`px-3 py-1 rounded text-sm font-bold ${
+    signal.signal === 'BUY' ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'
+  }`}>
+    {signal.signal}
+  </span>
+  <span className={`px-3 py-1 rounded text-sm font-bold ${
+    signal.qualityScore >= 8 ? 'bg-green-600 text-white' : 
+    signal.qualityScore >= 5 ? 'bg-yellow-500 text-black' : 'bg-red-500 text-white'
+  }`}>
+    Quality: {signal.qualityScore}/10
+  </span>
+</div>
+
+{/* Agar koi warnings hain toh show karo */}
+{signal.warnings && signal.warnings.length > 0 && (
+  <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-xs text-red-400">
+    <strong>⚠️ Risk Factors:</strong>
+    <ul className="list-disc ml-4 mt-1">
+      {signal.warnings.map((w: string, i: number) => <li key={i}>{w}</li>)}
+    </ul>
+  </div>
+)}
     <div className="space-y-4">
       <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
         {/* Signal Header */}
@@ -194,6 +219,6 @@ export function SignalResult({ signal }: SignalResultProps) {
           </div>
         </CardContent>
       </Card>
-    </div>
+    </div></>
   );
 }
