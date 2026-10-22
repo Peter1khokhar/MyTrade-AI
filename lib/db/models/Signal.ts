@@ -20,6 +20,9 @@ export interface ISignal extends Document {
     pips: number;
     reason: string;
   };
+    qualityScore?: number;
+  confluenceBreakdown?: any; // Ya Record<string, number>
+  warnings?: string[];
   marketData: {
     currentPrice: number;
     high: number;
@@ -43,6 +46,7 @@ const SignalSchema = new Schema<ISignal>(
       required: true,
       index: true,
     },
+
     pair: {
       type: String,
       required: true,
@@ -77,6 +81,9 @@ const SignalSchema = new Schema<ISignal>(
       pips: { type: Number, default: 0 },
       reason: { type: String, default: '' },
     },
+     qualityScore: { type: Number, default: 0 },
+    confluenceBreakdown: { type: Schema.Types.Mixed, default: {} },
+    warnings: { type: [String], default: [] },
     marketData: {
       currentPrice: Number,
       high: Number,

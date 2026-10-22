@@ -1,193 +1,258 @@
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db/connect';
 import User from '@/lib/db/models/User';
+import Signal from '@/lib/db/models/Signal';
 import Notification from '@/lib/db/models/Notification';
-import { getSingleTick, getOHLC } from '@/lib/market/biquote';
-import { analyzeICTSetup } from '@/lib/ai/market-scanner';
-import { sendTelegramMessage, formatSignalMessage } from '@/lib/telegram/send';
+import { getSingleTick, getOHLC, getOHLCWithVolume } from '@/lib/market/biquote';
+import { analyzeAllIndicators, type OHLCBar } from '@/lib/indicators/technical';
+import { analyzeMarketStructure } from '@/lib/indicators/structure';
+import { getKillzoneInfo, shouldGenerateSignal } from '@/lib/indicators/killzone';
+import { buildICTSMCPrompt } from '@/lib/ai/prompts/ict-smc';
+import { GoogleGenAI } from '@google/genai';
+
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 
 // ═══════════════════════════════════════════════════════════
-// 🔐 Verify Cron Secret
+// 📨 TELEGRAM SENDER HELPER
 // ═══════════════════════════════════════════════════════════
-function verifyCronSecret(req: Request): boolean {
-  const authHeader = req.headers.get('authorization');
-  const cronSecret = process.env.CRON_SECRET;
+async function sendTelegramMessage(chatId: string, message: string) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token || !chatId) return false;
 
-  if (!cronSecret) {
-    console.error('❌ CRON_SECRET not set in env');
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: message,
+        parse_mode: 'HTML',
+      }),
+    });
+    return res.ok;
+  } catch (error) {
+    console.error('Telegram error:', error);
     return false;
   }
-  return authHeader === `Bearer ${cronSecret}`;
 }
 
 // ═══════════════════════════════════════════════════════════
-// 🎯 POST - Scan Markets
+// 🔄 FETCH BARS WITH VOLUME
 // ═══════════════════════════════════════════════════════════
-export async function POST(req: Request) {
-  const startTime = Date.now();
-
+async function fetchBarsWithVolume(pair: string, timeframe: string, limit: number = 100): Promise<OHLCBar[]> {
   try {
-    // 1. Verify Auth
-    if (!verifyCronSecret(req)) {
-      return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
+    const yahooSymbol = pair.includes('USD') ? `${pair.slice(0, 3)}${pair.slice(3)}=X` : pair;
+    const yahooBars = await getOHLCWithVolume(yahooSymbol, timeframe, limit);
+    if (yahooBars && yahooBars.length > 0) return yahooBars;
+  } catch (err) {
+    // Fallback to Biquote below
+  }
+  
+  const bqBars = await getOHLC(pair, timeframe, limit);
+  return bqBars.map((b: any) => ({
+    time: b.time, open: b.open, high: b.high, low: b.low, close: b.close, volume: b.volume || 0,
+  }));
+}
+
+// ═══════════════════════════════════════════════════════════
+// 🚀 MAIN CRON HANDLER
+// ═══════════════════════════════════════════════════════════
+export async function GET(req: Request) {
+  try {
+    // 1. Security Check
+    const authHeader = req.headers.get('authorization');
+    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    console.log(`\n${'='.repeat(60)}`);
-    console.log(`🔍 Market Scanner Started: ${new Date().toISOString()}`);
-    console.log(`${'='.repeat(60)}`);
-
-    // 2. Killzone filter (Optional - Testing ke liye comment out kar sakte ho)
-    const now = new Date();
-    const istHour = parseInt(
-      now.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', hour12: false })
-    );
-    const isLondonKillzone = istHour >= 12 && istHour <= 15;
-    const isNYKillzone = istHour >= 17 && istHour <= 20;
-
-    // ⚠️ Testing ke liye abhi isko bypass kar rahe hain. 
-    // Production mein isko uncomment kar dena.
-    /*
-    if (!isLondonKillzone && !isNYKillzone) {
-      console.log(`⏰ Outside killzone (IST ${istHour}:00) - skipping scan`);
-      return NextResponse.json({ success: true, message: 'Outside killzone' });
-    }
-    */
 
     await connectDB();
 
-    // 3. Get users
-    const users = await User.find({
-      watchlist: { $exists: true, $ne: [] },
-    }).select('_id name email watchlist telegramChatId telegramConnected');
-
-    console.log(`👥 Users to scan for: ${users.length}`);
-
-    if (users.length === 0) {
-      return NextResponse.json({ success: true, message: 'No active users', usersScanned: 0 });
+    // 2. Killzone Check (Strict Mode) — Agar dead zone hai to exit
+    const killzone = getKillzoneInfo();
+    const zoneCheck = shouldGenerateSignal(true); 
+    
+    if (!zoneCheck.allowed) {
+      console.log(`[CRON] ⏸️ Skipping scan. ${zoneCheck.reason}`);
+      return NextResponse.json({ 
+        success: true, 
+        message: 'Outside killzone — no scanning', 
+        session: killzone.currentSession 
+      });
     }
 
-    // 4. Collect unique pairs
-    const allPairs = new Set<string>();
-    users.forEach((user) => {
-      user.watchlist.forEach((pair: string) => allPairs.add(pair));
-    });
+    console.log(`[CRON] 🟢 Scanning started. Session: ${killzone.currentSession}`);
 
-    console.log(`📊 Unique pairs: ${Array.from(allPairs).join(', ')}`);
-
-    // 5. Analyze pairs
-    const pairAnalysis = new Map();
-
-    for (const pair of allPairs) {
-      try {
-        console.log(`\n🎯 Analyzing ${pair}...`);
-
-        // Fetch data
-        const [tick, h4Data, h1Data, m15Data] = await Promise.all([
-          getSingleTick(pair),
-          getOHLC(pair, '4h', 50),
-          getOHLC(pair, '1h', 100),
-          getOHLC(pair, '15m', 100),
-        ]);
-
-        if (!tick || !h4Data || !h1Data || !m15Data) {
-          console.log(`   ⚠️ Data missing for ${pair}`);
-          continue;
-        }
-
-        // ✅ FIX: Properly structured params
-        const analysis = await analyzeICTSetup({
-          pair: pair,
-          currentPrice: tick?.price || 0,
-          h4Data: h4Data,
-          h1Data: h1Data,
-          m15Data: m15Data,
-        });
-
-        console.log(`   📈 Signal: ${analysis.signal} (${analysis.confidence}%)`);
-        console.log(`   🎯 Confluence: ${analysis.confluenceScore}`);
-
-        if (analysis.signal !== 'HOLD' && analysis.confidence >= 70) {
-          pairAnalysis.set(pair, analysis);
-          console.log(`   ✅ Valid signal!`);
-        } else {
-          console.log(`   ⏭️ Skipped (low confidence)`);
-        }
-
-      } catch (error) {
-        console.error(`❌ Error analyzing ${pair}:`, error);
-      }
-    }
-
-    // 6. Create notifications
-    let notificationsCreated = 0;
+    // 3. Get active users
+    const users = await User.find({ isActive: true });
+    
+    let totalScanned = 0;
+    let signalsGenerated = 0;
 
     for (const user of users) {
-      for (const pair of user.watchlist) {
-        const analysis = pairAnalysis.get(pair);
-        if (!analysis) continue;
+      // 4. Get user's watchlist (User model ke andar se array utha rahe hain)
+      const userPairs = user.watchlist || [];
+      
+      // Array of strings ko objects mein convert karo taaki loop kaam kare
+      const watchlist = userPairs.map((pair: string) => ({
+        pair: pair,
+        timeframe: '15m', // Default timeframe
+        isActive: true
+      }));
+      
+      for (const item of watchlist) {
+        totalScanned++;
+        const { pair, timeframe } = item;
 
-        // Save Notification
-        await Notification.create({
-          userId: user._id,
-          type: 'signal',
-          title: `🎯 ${analysis.signal} Signal: ${pair}`,
-          message: `${analysis.signal} setup detected with ${analysis.confidence}% confidence.`,
-          pair: pair,
-          signal: analysis.signal,
-          confidence: analysis.confidence,
-          entryPrice: analysis.entryPrice,
-          stopLoss: analysis.stopLoss,
-          takeProfit: analysis.takeProfit,
-          timeframe: analysis.timeframe,
-          strategy: analysis.strategy,
-          reason: analysis.reason,
-          confluenceScore: analysis.confluenceScore,
-        });
+        try {
+          // 5. Fetch Market Data
+          const tick = await getSingleTick(pair);
+          if (!tick) continue;
 
-        notificationsCreated++;
+          const [barsH4, barsH1, barsM15] = await Promise.all([
+            fetchBarsWithVolume(pair, '4h', 100),
+            fetchBarsWithVolume(pair, '1h', 100),
+            fetchBarsWithVolume(pair, '15m', 100),
+          ]);
 
-        // Send Telegram
-        if (user.telegramConnected && user.telegramChatId) {
-          try {
-            const message = formatSignalMessage({
-              pair, signal: analysis.signal, confidence: analysis.confidence,
-              entryPrice: analysis.entryPrice, stopLoss: analysis.stopLoss,
-              takeProfit: analysis.takeProfit, timeframe: analysis.timeframe,
-              strategy: analysis.strategy, reason: analysis.reason,
-              confluenceScore: analysis.confluenceScore,
+          if (!barsM15 || barsM15.length < 50) continue;
+
+          // 6. Calculate Indicators & Structure
+          const indH4 = analyzeAllIndicators(barsH4);
+          const indH1 = analyzeAllIndicators(barsH1);
+          const indM15 = analyzeAllIndicators(barsM15);
+
+          const structH4 = analyzeMarketStructure(barsH4);
+          const structH1 = analyzeMarketStructure(barsH1);
+          const structM15 = analyzeMarketStructure(barsM15);
+
+          // 7. Build Prompt & Call AI
+          const prompt = buildICTSMCPrompt({
+            pair, 
+            timeframe,
+            currentPrice: tick.price,
+            previousClose: tick.price - tick.change,
+            h4: { 
+              ...indH4, 
+              trend: indH4.trend,
+              volumeSpike: indH4.volumeSpike,
+              structure: structH4 
+            },
+            h1: { 
+              ...indH1, 
+              trend: indH1.trend,
+              volumeSpike: indH1.volumeSpike,
+              structure: structH1 
+            },
+            m15: { 
+              ...indM15, 
+              trend: indM15.trend,
+              volumeSpike: indM15.volumeSpike,
+              structure: structM15 
+            },
+            killzone,
+          });
+
+          const response = await ai.models.generateContent({
+            model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+            contents: prompt,
+            config: { responseMimeType: 'application/json', temperature: 0.2 },
+          });
+
+          const aiText = response.text || '';
+          const jsonMatch = aiText.match(/\{[\s\S]*\}/);
+          if (!jsonMatch) continue;
+
+          const aiSignal = JSON.parse(jsonMatch[0]);
+
+          // 8. STRICT QUALITY GATE: Only proceed if signal is BUY/SELL AND quality >= 7
+          if (
+            (aiSignal.signal === 'BUY' || aiSignal.signal === 'SELL') &&
+            aiSignal.qualityScore >= 7
+          ) {
+            signalsGenerated++;
+            console.log(`[CRON] 🎯 High-quality signal: ${pair} ${aiSignal.signal} (Quality: ${aiSignal.qualityScore})`);
+
+            // 9. Save Signal in DB
+            const savedSignal = await Signal.create({
+              userId: user._id,
+              pair, 
+              timeframe,
+              signal: aiSignal.signal,
+              confidence: aiSignal.confidence,
+              qualityScore: aiSignal.qualityScore,
+              entryPrice: aiSignal.entryPrice,
+              stopLoss: aiSignal.stopLoss,
+              takeProfit1: aiSignal.takeProfit1,
+              takeProfit2: aiSignal.takeProfit2,
+              takeProfit3: aiSignal.takeProfit3,
+              reason: aiSignal.reason,
+              strategy: aiSignal.strategy,
+              bestTimeToEnter: aiSignal.bestTimeToEnter,
+              marketData: {
+                currentPrice: tick.price,
+                session: killzone.currentSession,
+                h4Bias: structH4.bias,
+                h1Bias: structH1.bias,
+                m15Bias: structM15.bias,
+              },
             });
-            await sendTelegramMessage(user.telegramChatId, message);
-            console.log(`   📱 Telegram sent to ${user.email}`);
-          } catch (err) {
-            console.error(`   ❌ Telegram failed:`, err);
+
+            // 10. Create In-App Notification
+            const notifTitle = `🔥 High-Quality Signal: ${pair} ${aiSignal.signal}`;
+            const notifMessage = `Entry: ${aiSignal.entryPrice} | SL: ${aiSignal.stopLoss} | TP1: ${aiSignal.takeProfit1} | Quality: ${aiSignal.qualityScore}/10`;
+            
+            await Notification.create({
+              userId: user._id,
+              title: notifTitle,
+              message: notifMessage,
+              type: 'signal',
+              isRead: false,
+            });
+
+            // 11. Send Telegram Alert (Agar user ne connect kiya hai)
+            if (user.telegramChatId) {
+              const tgMessage = `
+🚨 <b>MYTRADE AI SIGNAL</b> 🚨
+<b>Pair:</b> ${pair}
+<b>Direction:</b> ${aiSignal.signal === 'BUY' ? '🟢 BUY' : '🔴 SELL'}
+<b>Timeframe:</b> ${timeframe}
+<b>Quality Score:</b> ${aiSignal.qualityScore}/10 ⭐
+
+<b>Entry:</b> ${aiSignal.entryPrice}
+<b>Stop Loss:</b> ${aiSignal.stopLoss}
+<b>Take Profit 1:</b> ${aiSignal.takeProfit1}
+<b>Take Profit 2:</b> ${aiSignal.takeProfit2}
+
+<b>Reason:</b> ${aiSignal.reason}
+
+<i>Session: ${killzone.currentSession}</i>
+              `.trim();
+
+              await sendTelegramMessage(user.telegramChatId, tgMessage);
+            }
           }
+
+        } catch (error) {
+          console.error(`[CRON] Error scanning ${pair}:`, error);
         }
+
+        // Add small delay to avoid rate limits
+        await new Promise((resolve) => setTimeout(resolve, 500));
       }
     }
 
-    const duration = Date.now() - startTime;
+    console.log(`[CRON] ✅ Scan complete. Scanned: ${totalScanned}, Signals: ${signalsGenerated}`);
 
     return NextResponse.json({
       success: true,
-      message: 'Scan complete',
-      stats: {
-        usersScanned: users.length,
-        pairsAnalyzed: allPairs.size,
-        validSignals: pairAnalysis.size,
-        notificationsCreated,
-        durationMs: duration,
-      },
+      message: 'Scan completed',
+      session: killzone.currentSession,
+      totalScanned,
+      signalsGenerated,
     });
 
   } catch (error) {
-    console.error('❌ Scanner error:', error);
-    return NextResponse.json(
-      { success: false, message: error instanceof Error ? error.message : 'Scan failed' },
-      { status: 500 }
-    );
+    console.error('[CRON] Fatal error:', error);
+    return NextResponse.json({ success: false, error: 'Scan failed' }, { status: 500 });
   }
-}
-
-export async function GET(req: Request) {
-  return POST(req);
 }

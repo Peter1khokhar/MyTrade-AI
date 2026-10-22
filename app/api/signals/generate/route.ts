@@ -5,7 +5,10 @@ import { GoogleGenAI } from '@google/genai';
 import connectDB from '@/lib/db/connect';
 import Signal from '@/lib/db/models/Signal';
 import Trade from '@/lib/db/models/Trade';
-import { getSingleTick, getOHLC } from '@/lib/market/biquote';
+import { getSingleTick, getOHLC, getOHLCWithVolume } from '@/lib/market/biquote';
+import { analyzeAllIndicators, type OHLCBar } from '@/lib/indicators/technical';
+import { analyzeMarketStructure } from '@/lib/indicators/structure';
+import { getKillzoneInfo, shouldGenerateSignal } from '@/lib/indicators/killzone';
 import { buildICTSMCPrompt } from '@/lib/ai/prompts/ict-smc';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
@@ -15,29 +18,46 @@ const generateSchema = z.object({
   timeframe: z.enum(['15m', '30m', '1h', '4h', '1d']),
 });
 
-function calculateRSI(prices: number[], period: number = 14): number {
-  if (prices.length < period + 1) return 50;
-  
-  let gains = 0;
-  let losses = 0;
-  
-  for (let i = 1; i <= period; i++) {
-    const change = prices[i] - prices[i - 1];
-    if (change > 0) gains += change;
-    else losses += Math.abs(change);
+// ═══════════════════════════════════════════════════════════
+// 🔄 FETCH BAR DATA WITH VOLUME (Hybrid: Biquote + Yahoo)
+// ═══════════════════════════════════════════════════════════
+async function fetchBarsWithVolume(
+  pair: string,
+  timeframe: string,
+  limit: number = 100
+): Promise<OHLCBar[]> {
+  // Try Yahoo Finance first for volume data
+  try {
+    const yahooSymbol = pair.includes('USD') 
+      ? `${pair.slice(0, 3)}${pair.slice(3)}=X` 
+      : pair;
+    const yahooBars = await getOHLCWithVolume(yahooSymbol, timeframe, limit);
+    if (yahooBars && yahooBars.length > 0) {
+      console.log(`   📊 Yahoo data: ${yahooBars.length} bars with volume`);
+      return yahooBars;
+    }
+  } catch (err) {
+    console.log(`   ⚠️ Yahoo failed, using Biquote (no volume)`);
   }
-  
-  const avgGain = gains / period;
-  const avgLoss = losses / period;
-  
-  if (avgLoss === 0) return 100;
-  
-  const rs = avgGain / avgLoss;
-  return 100 - (100 / (1 + rs));
+
+  // Fallback: Biquote (no volume, but price accurate)
+  const bqBars = await getOHLC(pair, timeframe, limit);
+  return bqBars.map((b: any) => ({
+    time: b.time,
+    open: b.open,
+    high: b.high,
+    low: b.low,
+    close: b.close,
+    volume: b.volume || 0,
+  }));
 }
 
+// ═══════════════════════════════════════════════════════════
+// 🚀 MAIN HANDLER
+// ═══════════════════════════════════════════════════════════
 export async function POST(req: Request) {
   try {
+    // ── Auth ──
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json(
@@ -48,7 +68,6 @@ export async function POST(req: Request) {
 
     const body = await req.json();
     const validation = generateSchema.safeParse(body);
-    
     if (!validation.success) {
       return NextResponse.json(
         { success: false, message: validation.error.issues[0].message },
@@ -57,117 +76,162 @@ export async function POST(req: Request) {
     }
 
     const { pair, timeframe } = validation.data;
-    
-    console.log(`\n${'='.repeat(50)}`);
-    console.log(`🎯 Generating signal for ${pair} @ ${timeframe}`);
-    console.log(`${'='.repeat(50)}`);
+
+    console.log(`\n${'='.repeat(60)}`);
+    console.log(`🎯 SIGNAL GENERATION: ${pair} @ ${timeframe}`);
+    console.log(`${'='.repeat(60)}`);
 
     await connectDB();
 
+    // ── Killzone Check ──
+    const killzone = getKillzoneInfo();
+    console.log(`🕐 Session: ${killzone.currentSession} (${killzone.quality})`);
+
+    // ── Fetch market data ──
     console.log('📊 Fetching market data...');
     const tick = await getSingleTick(pair);
-    const bars = await getOHLC(pair, timeframe, 100);
-    
-    if (!tick || !bars || bars.length === 0) {
+    if (!tick) {
       return NextResponse.json(
         { success: false, message: 'Market data उपलब्ध नहीं है' },
         { status: 404 }
       );
     }
 
-    const closes = bars.map((b: any) => b.close).filter((c: number) => c);
-    const highs = bars.map((b: any) => b.high).filter((h: number) => h);
-    const lows = bars.map((b: any) => b.low).filter((l: number) => l);
-    
-    const rsi = calculateRSI(closes, 14);
-    const sma20 = closes.slice(-20).reduce((a: number, b: number) => a + b, 0) / Math.min(20, closes.length);
-    const sma50 = closes.slice(-50).reduce((a: number, b: number) => a + b, 0) / Math.min(50, closes.length);
-    
-    const high = Math.max(...highs.slice(-50));
-    const low = Math.min(...lows.slice(-50));
-    
-    let trend = 'NEUTRAL';
-    if (sma20 > sma50 && tick.price > sma20) trend = 'BULLISH';
-    else if (sma20 < sma50 && tick.price < sma20) trend = 'BEARISH';
+    const [barsH4, barsH1, barsM15] = await Promise.all([
+      fetchBarsWithVolume(pair, '4h', 100),
+      fetchBarsWithVolume(pair, '1h', 100),
+      fetchBarsWithVolume(pair, '15m', 100),
+    ]);
 
-// 🧠 Load learning context
-const { getLearningContext } = await import('@/lib/ai/get-learning-context');
-const learningContext = await getLearningContext(session.user.id);
+    if (!barsM15 || barsM15.length < 50) {
+      return NextResponse.json(
+        { success: false, message: 'Insufficient data for analysis' },
+        { status: 404 }
+      );
+    }
 
-// Build base prompt
-const basePrompt = buildICTSMCPrompt({
-  pair,
-  timeframe,
-  currentPrice: tick.price,
-  previousClose: tick.price - tick.change,
-  high,
-  low,
-  rsi: parseFloat(rsi.toFixed(2)),
-  sma20: parseFloat(sma20.toFixed(5)),
-  sma50: parseFloat(sma50.toFixed(5)),
-  trend,
-  volatility: (high - low).toFixed(5),
-});
+    // ── Compute indicators + structure ──
+    console.log('🔬 Computing indicators...');
+    const indH4 = analyzeAllIndicators(barsH4);
+    const indH1 = analyzeAllIndicators(barsH1);
+    const indM15 = analyzeAllIndicators(barsM15);
 
-// 🎯 Combine learning context with base prompt
-const prompt = learningContext 
-  ? `${learningContext}\n\n${basePrompt}`
-  : basePrompt;
+    console.log('🏗️ Detecting market structure...');
+    const structH4 = analyzeMarketStructure(barsH4);
+    const structH1 = analyzeMarketStructure(barsH1);
+    const structM15 = analyzeMarketStructure(barsM15);
 
-console.log(`📚 Learning context applied: ${learningContext ? 'YES' : 'NO'}`);
+    // ── Learning context ──
+    const { getLearningContext } = await import('@/lib/ai/get-learning-context');
+    const learningContext = await getLearningContext(session.user.id);
+    console.log(`📚 Learning context: ${learningContext ? 'YES' : 'NO'}`);
 
+    // ── Build enhanced prompt ──
+    const prompt = buildICTSMCPrompt({
+      pair,
+      timeframe,
+      currentPrice: tick.price,
+      previousClose: tick.price - tick.change,
+      h4: {
+        rsi: indH4.rsi,
+        sma20: indH4.sma20,
+        sma50: indH4.sma50,
+        ema20: indH4.ema20,
+        ema50: indH4.ema50,
+        vwap: indH4.vwap,
+        atr: indH4.atr,
+        volumeSpike: indH4.volumeSpike,
+        trend: indH4.trend,
+        structure: structH4,
+      },
+      h1: {
+        rsi: indH1.rsi,
+        sma20: indH1.sma20,
+        sma50: indH1.sma50,
+        ema20: indH1.ema20,
+        ema50: indH1.ema50,
+        vwap: indH1.vwap,
+        atr: indH1.atr,
+        volumeSpike: indH1.volumeSpike,
+        trend: indH1.trend,
+        structure: structH1,
+      },
+      m15: {
+        rsi: indM15.rsi,
+        sma20: indM15.sma20,
+        sma50: indM15.sma50,
+        ema20: indM15.ema20,
+        ema50: indM15.ema50,
+        vwap: indM15.vwap,
+        atr: indM15.atr,
+        obv: indM15.obv,
+        volumeSpike: indM15.volumeSpike,
+        trend: indM15.trend,
+        structure: structM15,
+        range: indM15.range,
+      },
+      killzone,
+      learningContext,
+    });
+
+    // ── Call Gemini ──
     console.log('🤖 Calling Gemini AI...');
-    
     let response;
     let lastError;
-    
+
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
-        console.log(`   Attempt ${attempt}/3...`);
-        
         response = await ai.models.generateContent({
           model: (process.env.GEMINI_MODEL as string) || 'gemini-2.5-flash',
           contents: prompt,
+          config: {
+            responseMimeType: 'application/json',
+            temperature: 0.3, // Lower temp = more consistent
+          },
         });
-        
         console.log(`   ✅ Success on attempt ${attempt}`);
         break;
       } catch (error: any) {
         lastError = error;
-        console.log(`   ⚠️ Attempt ${attempt} failed:`, error.message);
-        
+        console.log(`   ⚠️ Attempt ${attempt} failed: ${error.message}`);
         if (attempt < 3 && (error.message?.includes('503') || error.message?.includes('UNAVAILABLE'))) {
           const waitTime = attempt * 3000;
-          console.log(`   ⏳ Waiting ${waitTime}ms...`);
-          await new Promise(resolve => setTimeout(resolve, waitTime));
+          await new Promise((r) => setTimeout(r, waitTime));
           continue;
         }
-        
         throw error;
       }
     }
-    
-    if (!response) {
-      throw lastError || new Error('AI response failed after retries');
-    }
+
+    if (!response) throw lastError || new Error('AI failed');
 
     const aiText = response.text || '';
-    console.log('✅ AI Response received');
-
     const jsonMatch = aiText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('AI ने valid JSON नहीं दिया');
-    }
-    
-    const aiSignal = JSON.parse(jsonMatch[0]);
-    console.log('📝 Signal:', aiSignal.signal, `(${aiSignal.confidence}%)`);
+    if (!jsonMatch) throw new Error('AI ने valid JSON नहीं दिया');
 
+    const aiSignal = JSON.parse(jsonMatch[0]);
+    console.log(`📝 Signal: ${aiSignal.signal} (${aiSignal.confidence}% / Quality: ${aiSignal.qualityScore}/10)`);
+
+    // ── Quality gate ──
+    if (aiSignal.signal === 'HOLD' || aiSignal.qualityLabel === 'REJECT') {
+      console.log(`⛔ Rejected signal — Quality: ${aiSignal.qualityScore}/10`);
+      return NextResponse.json({
+        success: true,
+        signal: null,
+        message: aiSignal.reason || 'No high-quality setup found',
+        qualityScore: aiSignal.qualityScore,
+        warnings: aiSignal.warnings || [],
+      });
+    }
+
+    // ── Save signal ──
     const savedSignal = await Signal.create({
       userId: session.user.id,
       pair,
       timeframe,
       signal: aiSignal.signal,
       confidence: aiSignal.confidence,
+      qualityScore: aiSignal.qualityScore,
       entryPrice: aiSignal.entryPrice,
       stopLoss: aiSignal.stopLoss,
       takeProfit1: aiSignal.takeProfit1,
@@ -178,33 +242,32 @@ console.log(`📚 Learning context applied: ${learningContext ? 'YES' : 'NO'}`);
       strategy: aiSignal.strategy,
       bestTimeToEnter: aiSignal.bestTimeToEnter,
       largeMove: aiSignal.largeMove || { possible: false, pips: 0, reason: '' },
+      confluenceBreakdown: aiSignal.confluenceBreakdown,
+      warnings: aiSignal.warnings,
       marketData: {
         currentPrice: tick.price,
-        high,
-        low,
-        rsi,
-        sma20,
-        sma50,
-        trend,
+        session: killzone.currentSession,
+        killzoneQuality: killzone.quality,
+        h4Bias: structH4.bias,
+        h1Bias: structH1.bias,
+        m15Bias: structM15.bias,
       },
     });
 
-    console.log('💾 Signal saved:', savedSignal._id);
+    console.log(`💾 Signal saved: ${savedSignal._id}`);
 
+    // ── Auto-create Trade ──
     let createdTrade = null;
-
     if (aiSignal.signal === 'BUY' || aiSignal.signal === 'SELL') {
       try {
-        const maxHours = 
+        const maxHours =
           timeframe === '15m' ? 1 :
           timeframe === '30m' ? 2 :
           timeframe === '1h' ? 4 :
-          timeframe === '4h' ? 12 :
-          24;
-        
+          timeframe === '4h' ? 12 : 24;
         const maxExitTime = new Date();
         maxExitTime.setHours(maxExitTime.getHours() + maxHours);
-        
+
         createdTrade = await Trade.create({
           userId: session.user.id,
           signalId: savedSignal._id,
@@ -225,8 +288,7 @@ console.log(`📚 Learning context applied: ${learningContext ? 'YES' : 'NO'}`);
           strategy: aiSignal.strategy,
           reason: aiSignal.reason,
         });
-        
-        console.log('🎯 Trade auto-created:', createdTrade._id);
+        console.log(`🎯 Trade auto-created: ${createdTrade._id}`);
       } catch (tradeError) {
         console.error('⚠️ Trade auto-create failed:', tradeError);
       }
