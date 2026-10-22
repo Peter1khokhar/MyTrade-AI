@@ -47,13 +47,13 @@ export async function POST(req: Request) {
 
     // 2. Get all users with active plans (only Pro users)
     const users = await User.find({
-      plan: { $in: ['weekly', 'monthly', 'special', 'free_trial'] },
-      $or: [
-        { planExpiry: { $gt: new Date() } },
-        { plan: 'special' },
-      ],
+      // plan: { $in: ['weekly', 'monthly', 'special', 'free_trial'] },
+      // $or: [
+      //   { planExpiry: { $gt: new Date() } },
+      //   { plan: 'special' },
+      // ],
       watchlist: { $exists: true, $ne: [] },
-    }).select('_id name email watchlist plan');
+    }).select('_id name email watchlist plan telegramChatId telegramConnected');
 
     console.log(`👥 Users to scan for: ${users.length}`);
 

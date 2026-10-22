@@ -93,6 +93,7 @@ export async function POST(req: Request) {
 
     // 🎉 Success
     user.isEmailVerified = true;
+    user.isActive = true;
     user.emailVerificationCode = undefined;
     user.emailVerificationExpiry = undefined;
     user.emailVerificationAttempts = 0;

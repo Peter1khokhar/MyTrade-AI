@@ -3,9 +3,10 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --font-body: var(--font-body), 'Inter', sans-serif;
-  --font-fancy: var(--font-fancy), 'Playfair Display', serif;
-  --font-mono: ui-monospace, 'Courier New', monospace;
+  --font-heading: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Monaco, 'Courier New', monospace;
+  --font-fancy: 'Georgia', 'Times New Roman', serif;
 }
 
 @layer base {

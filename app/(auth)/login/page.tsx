@@ -43,36 +43,36 @@ function LoginContent() {
     setError('');
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError('');
+    const handleSubmit = async (e: React.FormEvent) => {
+      e.preventDefault();
+      setIsLoading(true);
+      setError('');
 
-    try {
-      const result = await signIn('credentials', {
-        email: formData.email,
-        password: formData.password,
-        redirect: false,
-      });
+      try {
+        const result = await signIn('credentials', {
+          email: formData.email,
+          password: formData.password,
+          redirect: false,
+        });
 
-      if (result?.error) {
-        setError(result.error);
+        if (result?.error) {
+          setError(result.error);
+          setIsLoading(false);
+          return;
+        }
+
+        // 🎉 Show welcome animation
+        setShowWelcome(true);
+        setTimeout(() => {
+          router.push('/dashboard');
+          router.refresh();
+        }, 800);
+        
+      } catch (err) {
+        setError('Something went wrong, try again');
         setIsLoading(false);
-        return;
       }
-
-      // 🎉 Show welcome animation
-      setShowWelcome(true);
-      setTimeout(() => {
-        router.push('/dashboard');
-        router.refresh();
-      }, 800);
-      
-    } catch (err) {
-      setError('Something went wrong, try again');
-      setIsLoading(false);
-    }
-  };
+    };
 
   return (
     <>

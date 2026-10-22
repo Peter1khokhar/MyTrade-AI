@@ -73,6 +73,7 @@ export async function POST(req: Request) {
         password: hashedPassword,
         plan: 'free',
         watchlist: ['EURUSD', 'GBPUSD', 'XAUTUSD'],
+        isActive: false,
         isEmailVerified: false,
         emailVerificationCode: hashedOTP,
         emailVerificationExpiry: new Date(

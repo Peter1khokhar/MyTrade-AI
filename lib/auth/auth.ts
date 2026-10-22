@@ -39,12 +39,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }).select('+password');
 
         if (!user) {
-          throw new Error('इस email से कोई account नहीं मिला');
+          throw new Error('account not fount with email');
         }
 
         // User created via Google - no password
         if (!user.password) {
-          throw new Error('इस account से Google से login करो');
+          throw new Error('login this account with google');
         }
 
         const isPasswordValid = await bcrypt.compare(
@@ -53,12 +53,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         );
 
         if (!isPasswordValid) {
-          throw new Error('Password गलत है');
+          throw new Error('invalid Password');
+        }
+
+         // 🆕 Check if account is active
+        if (!user.isActive) {
+          throw new Error('Account active verify your email.');
         }
 
         // Email verification check
         if (!user.isEmailVerified) {
-          throw new Error('पहले अपना email verify करो');
+          throw new Error('verify your email');
         }
 
         return {

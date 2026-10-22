@@ -29,6 +29,7 @@ export interface IUser extends Document {
   watchlist: string[];
   
   // Email Verification
+  isActive: boolean;
   isEmailVerified: boolean;
   emailVerificationCode?: string;
   emailVerificationExpiry?: Date;
@@ -129,6 +130,13 @@ const UserSchema = new Schema<IUser>(
     watchlist: {
       type: [String],
       default: ['EURUSD', 'GBPUSD', 'XAUTUSD'],
+    },
+    
+     // 🆕 Account Status
+    isActive: {
+      type: Boolean,
+      default: false,
+      index: true,
     },
     
     // Email Verification
