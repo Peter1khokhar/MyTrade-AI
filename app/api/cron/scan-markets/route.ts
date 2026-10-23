@@ -17,7 +17,10 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 // ═══════════════════════════════════════════════════════════
 async function sendTelegramMessage(chatId: string, message: string) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
-  if (!token || !chatId) return false;
+  if (!token || !chatId) {
+    console.log(`[TELEGRAM] Missing token or chatId. Token: ${!!token}, ChatId: ${!!chatId}`);
+    return false;
+  }
 
   try {
     const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -29,9 +32,16 @@ async function sendTelegramMessage(chatId: string, message: string) {
         parse_mode: 'HTML',
       }),
     });
-    return res.ok;
+    
+    if (!res.ok) {
+      const err = await res.json();
+      console.error('[TELEGRAM] API Error:', err);
+      return false;
+    }
+
+    return true;
   } catch (error) {
-    console.error('Telegram error:', error);
+    console.error('[TELEGRAM] Fetch error:', error);
     return false;
   }
 }
@@ -169,6 +179,22 @@ export async function GET(req: Request) {
             (aiSignal.signal === 'BUY' || aiSignal.signal === 'SELL') &&
             aiSignal.qualityScore >= 7
           ) {
+            
+            // 👇 NEW: Signal Deduplication (Spam Protection)
+            // Check karo ki pichle 1 ghante me same signal bheja gaya hai kya?
+            const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+            const existingSignal = await Signal.findOne({
+              userId: user._id,
+              pair: pair,
+              signal: aiSignal.signal,
+              createdAt: { $gte: oneHourAgo }
+            });
+
+            if (existingSignal) {
+              console.log(`[CRON] ⏭️ Skipping duplicate signal for ${pair} ${aiSignal.signal} (sent recently)`);
+              continue; // Skip and move to next pair
+            }
+
             signalsGenerated++;
             console.log(`[CRON] 🎯 High-quality signal: ${pair} ${aiSignal.signal} (Quality: ${aiSignal.qualityScore})`);
 
@@ -197,19 +223,30 @@ export async function GET(req: Request) {
               },
             });
 
-            // 10. Create In-App Notification
-            const notifTitle = `🔥 High-Quality Signal: ${pair} ${aiSignal.signal}`;
-            const notifMessage = `Entry: ${aiSignal.entryPrice} | SL: ${aiSignal.stopLoss} | TP1: ${aiSignal.takeProfit1} | Quality: ${aiSignal.qualityScore}/10`;
-            
+            // 10. Create In-App Notification (FIXED FOR MODEL)
             await Notification.create({
               userId: user._id,
-              title: notifTitle,
-              message: notifMessage,
               type: 'signal',
+              title: `${aiSignal.signal} Signal: ${pair}`,
+              message: `AI detected a ${aiSignal.signal} setup on ${pair} with ${aiSignal.confidence}% confidence.`,
               isRead: false,
+              
+              // Model ke hisaab se top-level pe fields
+              pair: pair,
+              signal: aiSignal.signal,
+              confidence: aiSignal.confidence,
+              entryPrice: aiSignal.entryPrice,
+              stopLoss: aiSignal.stopLoss,
+              takeProfit: aiSignal.takeProfit1,
+              timeframe: timeframe,
+              strategy: aiSignal.strategy,
+              reason: aiSignal.reason,
+              confluenceScore: `${aiSignal.qualityScore}/10 confluence`,
             });
 
-            // 11. Send Telegram Alert (Agar user ne connect kiya hai)
+            // 11. Send Telegram Alert
+            console.log(`[TELEGRAM] Checking user ${user.email}. ChatId: ${user.telegramChatId || 'MISSING'}`);
+            
             if (user.telegramChatId) {
               const tgMessage = `
 🚨 <b>MYTRADE AI SIGNAL</b> 🚨
@@ -228,7 +265,10 @@ export async function GET(req: Request) {
 <i>Session: ${killzone.currentSession}</i>
               `.trim();
 
-              await sendTelegramMessage(user.telegramChatId, tgMessage);
+              const sent = await sendTelegramMessage(user.telegramChatId, tgMessage);
+              console.log(`[TELEGRAM] Message sent status for ${user.email}: ${sent}`);
+            } else {
+              console.log(`[TELEGRAM] ⚠️ No telegramChatId found for ${user.email}. Skipping Telegram.`);
             }
           }
 
